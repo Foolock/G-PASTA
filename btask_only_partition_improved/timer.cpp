@@ -1032,7 +1032,6 @@ void Timer::_update_timing() {
   // rebuild _taskflow by vivekDAG
   start = std::chrono::steady_clock::now();
   _rebuild_taskflow();
-  _taskflow.dump(std::cout);
   end = std::chrono::steady_clock::now();
   _vivek_btask_rebuild_time += std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
   
@@ -1041,7 +1040,6 @@ void Timer::_update_timing() {
   _executor.run(_taskflow).wait();
   end = std::chrono::steady_clock::now();
   _vivek_btask_runtime += std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
-  _task_timing_profile();
   _taskflow.clear();
 
   // Clear vivek partition parameters
@@ -1892,14 +1890,10 @@ void Timer::_try_merging(VivekTask* least_cost_task, std::vector<VivekTask*>& lo
     _update_top_down_vector += std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
 
     /*
-     * step 2-3-4. update _global_task_vector  
+     * step 2-3-4. update _global_task_vector 
      */
     start = std::chrono::steady_clock::now();
-    // push back the merged task to global task vector and sort it
-    _global_task_vector.push_back(_vivekDAG._vtask_ptrs[_vivekDAG._vtask_ptrs.size()-1]);
-    std::sort(_global_task_vector.begin(), _global_task_vector.end(), [](const VivekTask* a, VivekTask* b){
-      return a->_local_crit_cost < b->_local_crit_cost;
-    });
+    _insert_merged_vivekTask(_vivekDAG._vtask_ptrs[_vivekDAG._vtask_ptrs.size()-1]);
     end = std::chrono::steady_clock::now();
     _update_global_task_vector += std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
 
@@ -2038,14 +2032,12 @@ void Timer::_insert_merged_vivekTask(VivekTask* merged_vtask) {
    * traverse _global_task_vector and insert merged_vtask into the correct position 
    * by _local_crit_cost(increasing order)
    */
+ 
+  auto it = std::lower_bound(_global_task_vector.begin(), _global_task_vector.end(), merged_vtask,  [](const VivekTask* a, const VivekTask* b) {
+    return a->_local_crit_cost < b->_local_crit_cost;
+  });
+	_global_task_vector.insert(it, merged_vtask);	
   
-  auto it = _global_task_vector.begin();
-  while(1) {
-    if(!(*it)->_merged) {
-      if(merged_vtask->_local_crit_cost > (*it)->_)
-    }  
-  }   
-
 }
 
 void Timer::_update_local_crit_cost() {
