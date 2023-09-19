@@ -1642,6 +1642,8 @@ void Timer::_initialize_local_crit_cost_pins() {
   for(auto pin : _frontiers) {
     pin->_flocal_crit_cost = pin->_ftemp_cost_prev_self + pin->_ftemp_cost_after_self - pin->_fself_cost;
     pin->_blocal_crit_cost = pin->_btemp_cost_prev_self + pin->_btemp_cost_after_self - pin->_bself_cost;
+    pin->_fdepth = pin->_ftemp_cost_prev_self;
+    pin->_bdepth = pin->_btemp_cost_prev_self;
   }
 
 }
@@ -1688,7 +1690,7 @@ void Timer::_initialize_vivekDAG() {
 
   // add tasks to vivekDAG
   for(auto pin : _bprop_cands) {
-    _vivekDAG.addVivekTask(pin->_bvid, pin->_blocal_crit_cost, std::make_pair(false, pin));  
+    _vivekDAG.addVivekTask(pin->_bvid, pin->_bdepth, std::make_pair(false, pin));  
   }
 
   // update self cost of tasks in vivekDAG for later cost update
@@ -1830,7 +1832,7 @@ void Timer::_partition_vivekDAG_GDCA() {
   } 
 
   // merging parameter
-  size_t dst_cluster_size = 3; // destination cluster size
+  size_t dst_cluster_size = 2; // destination cluster size
   size_t cur_cluster_id = 0; // current cluster id  
   size_t counter = 0;
   // std::list<int> boundary; // vtasks(id) whose dependents are not fully released
