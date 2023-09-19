@@ -354,6 +354,7 @@ class Timer {
     std::vector<VivekTask*> _global_task_vector;
     std::vector<VivekTask*> _global_task_vector_GDCA;
     std::priority_queue<VivekTask*, std::vector<VivekTask*>, CompareTaskByCost> _global_task_queue_GDCA;
+    std::queue<Pin*> _global_pin_queue_GDCA;
 
     // initialize local critical path cost for each pins
     void _initialize_local_crit_cost_pins();
@@ -364,6 +365,7 @@ class Timer {
     // partition vivekDAG
     void _partition_vivekDAG();
     void _partition_vivekDAG_GDCA();
+    void _partition_GDCA();
 
     // print runtime for each task
     void _task_timing_profile();

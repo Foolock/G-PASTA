@@ -10,4 +10,5 @@ Replace Opentimer's timer for use
 
 9/19
 1. BUGs in btask_only_partition_GDCA
+2. fixed BUGs in btask_only_partition_GDCA
 

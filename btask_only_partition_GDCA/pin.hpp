@@ -228,6 +228,8 @@ class Pin {
     // pin's vivekID to initialize vivekDAG
     int _fvid = 0;
     int _bvid = 0;
+
+    size_t _cluster_id;
 }; 
 
 // ------------------------------------------------------------------------------------------------

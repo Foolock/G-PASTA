@@ -103,6 +103,7 @@ namespace ot {
       void resetVivekDAG() {
         _vtask_ptrs.clear();
         _vtasks.clear();
+        _vtask_clusters.clear();
       }
 
     private:

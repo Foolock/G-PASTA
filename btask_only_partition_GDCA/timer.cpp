@@ -1032,16 +1032,15 @@ void Timer::_update_timing() {
 
   // rebuild _taskflow by vivekDAG
   start = std::chrono::steady_clock::now();
-  // _rebuild_taskflow_vivek();
+  _rebuild_taskflow_vivek();
   // _rebuild_taskflow_GDCA();
   end = std::chrono::steady_clock::now();
   _vivek_btask_rebuild_time += std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
-  _taskflow.dump(std::cout);
+  // _taskflow.dump(std::cout);
   
   // Execute the task
   start = std::chrono::steady_clock::now();
-  _run_vivekDAG_GDCA_seq();
-  // _executor.run(_taskflow).wait();
+  _executor.run(_taskflow).wait();
   end = std::chrono::steady_clock::now();
   _vivek_btask_runtime += std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
   _taskflow.clear();
@@ -1831,8 +1830,9 @@ void Timer::_partition_vivekDAG_GDCA() {
   } 
 
   // merging parameter
-  size_t dst_cluster_size = 1; // destination cluster size
+  size_t dst_cluster_size = 10000; // destination cluster size
   size_t cur_cluster_id = 0; // current cluster id  
+  size_t counter = 0;
   // std::list<int> boundary; // vtasks(id) whose dependents are not fully released
   while(!_global_task_queue_GDCA.empty()) {
 
@@ -1840,22 +1840,13 @@ void Timer::_partition_vivekDAG_GDCA() {
     VivekTask* master = _global_task_queue_GDCA.top();
     _global_task_queue_GDCA.pop();
     
-    // check if this task has been merged
-    if(master->_merged) {
-      continue;
-    }
-    
     // a vector to store the vtasks in the same cluster
     std::vector<VivekTask*> cur_cluster;
 
     // assign cluster id
     master->_cluster_id = cur_cluster_id;
-    if(master->_pushed) {
-      std::cerr << "master already pushed.\n";
-      std::exit(EXIT_FAILURE);
-    }
     cur_cluster.push_back(master); 
-    master->_pushed = true;
+    counter++;
 
     // release dependents for successors of master
     for(auto successor_id : master->_fanout) {
@@ -1875,12 +1866,8 @@ void Timer::_partition_vivekDAG_GDCA() {
       VivekTask* next = _global_task_queue_GDCA.top();
       _global_task_queue_GDCA.pop();
       next->_cluster_id = cur_cluster_id; 
-      if(next->_pushed) {
-        std::cerr << "next already pushed.\n";
-        std::exit(EXIT_FAILURE);
-      }
       cur_cluster.push_back(next);
-      next->_pushed = true;
+      counter++;
       cluster_size++;
 
       for(auto successor_id : next->_fanout) {
