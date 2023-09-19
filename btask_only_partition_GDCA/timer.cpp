@@ -1032,8 +1032,8 @@ void Timer::_update_timing() {
 
   // rebuild _taskflow by vivekDAG
   start = std::chrono::steady_clock::now();
-  _rebuild_taskflow_vivek();
-  // _rebuild_taskflow_GDCA();
+  // _rebuild_taskflow_vivek();
+  _rebuild_taskflow_GDCA();
   end = std::chrono::steady_clock::now();
   _vivek_btask_rebuild_time += std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
   // _taskflow.dump(std::cout);
@@ -1830,7 +1830,7 @@ void Timer::_partition_vivekDAG_GDCA() {
   } 
 
   // merging parameter
-  size_t dst_cluster_size = 10000; // destination cluster size
+  size_t dst_cluster_size = 3; // destination cluster size
   size_t cur_cluster_id = 0; // current cluster id  
   size_t counter = 0;
   // std::list<int> boundary; // vtasks(id) whose dependents are not fully released
@@ -2322,7 +2322,6 @@ void Timer::_rebuild_taskflow_GDCA() {
   // add fanin according to all fanin of vtask inside a cluster
   for(size_t cluster_id=0; cluster_id<_vivekDAG._vtask_clusters.size(); cluster_id++) {
     for(auto vtask : _vivekDAG._vtask_clusters[cluster_id]) {
-      std::cerr << "add fanin for vtask: " << cluster_id << "\n";
       for(auto fanin_id : vtask->_fanin) {
         if(_vivekDAG._vtask_ptrs[fanin_id]->_cluster_id != cluster_id) {
           _rebuild_vivekDAG._vtask_ptrs[cluster_id]->addFanin(_vivekDAG._vtask_ptrs[fanin_id]->_cluster_id);
@@ -2346,6 +2345,8 @@ void Timer::_rebuild_taskflow_GDCA() {
   for(size_t i=0; i<_rebuild_vivekDAG._vtask_ptrs.size(); i++) {
     _rebuild_vivekDAG._vtask_ptrs[i]->deleteRepFan();
   }  
+
+  std::cerr << "after GDCA partition, graph size: " << _rebuild_vivekDAG._vtask_ptrs.size() << "\n";
 
   // emplace all tasks in vivekDAG to _taskflow
   for(auto task : _rebuild_vivekDAG._vtask_ptrs) {
@@ -2391,10 +2392,6 @@ void Timer::_run_vivekDAG_GDCA_seq() {
           _fprop_test(*(pair.second));
         }
         else {
-          if(pair.second == nullptr) {
-            std::cerr << "nullptr.\n";
-            std::exit(EXIT_FAILURE);
-          }
           _bprop_rat(*(pair.second));
         }
       }

@@ -45,7 +45,6 @@ class Timer {
       
       std::cout << "_vivek_btask_rebuild_time: " << _vivek_btask_rebuild_time << "\n";
       std::cout << "_vivek_btask_runtime: " << _vivek_btask_runtime << "\n";
-      _partition_timing_profile();
 
     }
 
