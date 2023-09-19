@@ -8,3 +8,6 @@ Replace Opentimer's timer for use
 9/14
 1. created btask_only_partition_improved. Details in its folder readme.md
 
+9/19
+1. BUGs in btask_only_partition_GDCA
+
