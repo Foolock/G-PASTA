@@ -26,6 +26,10 @@ namespace ot {
         _pins.push_back(pin);
       } 
 
+      void addPin(std::pair<bool, Pin*>& pin) {
+        _pins.push_back(pin);
+      } 
+
       void addFanin(int id) {
         _fanin.push_back(id);
       }

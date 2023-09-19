@@ -1020,7 +1020,6 @@ void Timer::_update_timing() {
   // partition vivekDAG
   auto start = std::chrono::steady_clock::now();
   _partition_vivekDAG_GDCA();
-  // _partition_vivekDAG();
   auto end = std::chrono::steady_clock::now();
   _partition_DAG_time += std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
 
@@ -1032,11 +1031,9 @@ void Timer::_update_timing() {
 
   // rebuild _taskflow by vivekDAG
   start = std::chrono::steady_clock::now();
-  // _rebuild_taskflow_vivek();
   _rebuild_taskflow_GDCA();
   end = std::chrono::steady_clock::now();
   _vivek_btask_rebuild_time += std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
-  // _taskflow.dump(std::cout);
   
   // Execute the task
   start = std::chrono::steady_clock::now();
@@ -1819,11 +1816,7 @@ void Timer::_partition_vivekDAG() {
   }
 }
 
-void Timer::_partition_vivekDAG_GDCA() {
-
-  /*
-   * improve vivek partition by removing checking cycle 
-   */
+void Timer::_GDCA_dfs() {
 
   for(auto vtask : _vivekDAG._vtask_ptrs) {
     if(vtask->_fanin.size() == 0) {
@@ -1832,9 +1825,8 @@ void Timer::_partition_vivekDAG_GDCA() {
   } 
 
   // merging parameter
-  size_t dst_cluster_size = 2; // destination cluster size
+  size_t dst_cluster_size = 1; // destination cluster size
   size_t cur_cluster_id = 0; // current cluster id  
-  size_t counter = 0;
   // std::list<int> boundary; // vtasks(id) whose dependents are not fully released
   while(!_global_task_queue_GDCA.empty()) {
 
@@ -1848,7 +1840,6 @@ void Timer::_partition_vivekDAG_GDCA() {
     // assign cluster id
     master->_cluster_id = cur_cluster_id;
     cur_cluster.push_back(master); 
-    counter++;
 
     // release dependents for successors of master
     for(auto successor_id : master->_fanout) {
@@ -1869,7 +1860,6 @@ void Timer::_partition_vivekDAG_GDCA() {
       _global_task_queue_GDCA.pop();
       next->_cluster_id = cur_cluster_id; 
       cur_cluster.push_back(next);
-      counter++;
       cluster_size++;
 
       for(auto successor_id : next->_fanout) {
@@ -1881,7 +1871,106 @@ void Timer::_partition_vivekDAG_GDCA() {
     }
     _vivekDAG._vtask_clusters.push_back(cur_cluster);
     cur_cluster_id++;
+
   } 
+}
+
+void Timer::_GDCA_build_coarsen_graph() {
+
+  // each cluster in _vtask_clusters stands for a new vtask
+  for(size_t cluster_id=0; cluster_id<_vivekDAG._vtask_clusters.size(); cluster_id++) {
+    int rebuild_vtask_id = cluster_id;
+    int rebuild_vtask_local_cost = 0;
+    std::vector<std::pair<bool, Pin*>> rebuild_vtask_pins; 
+    for(auto vtask : _vivekDAG._vtask_clusters[cluster_id]) {
+      rebuild_vtask_pins.insert(rebuild_vtask_pins.end(), vtask->_pins.begin(), vtask->_pins.end());
+      // rebuild_vtask_pins.push_back(vtask->_pins[0]); // in GDCA, each vtask only has one pin
+    }
+    _rebuild_vivekDAG.addVivekTask(rebuild_vtask_id, rebuild_vtask_local_cost, rebuild_vtask_pins);
+  }
+
+ 
+  /*
+  // add fanin according to all fanin of vtask inside a cluster
+  for(size_t cluster_id=0; cluster_id<_vivekDAG._vtask_clusters.size(); cluster_id++) {
+    for(auto vtask : _vivekDAG._vtask_clusters[cluster_id]) {
+      for(auto fanin_id : vtask->_fanin) {
+        if(_vivekDAG._vtask_ptrs[fanin_id]->_cluster_id != cluster_id) {
+          _rebuild_vivekDAG._vtask_ptrs[cluster_id]->addFanin(_vivekDAG._vtask_ptrs[fanin_id]->_cluster_id);
+        }
+      }
+    }
+  }
+  */
+
+  // add fanout according to all fanout of vtask inside a cluster
+  for(size_t cluster_id=0; cluster_id<_vivekDAG._vtask_clusters.size(); cluster_id++) {
+    for(auto vtask : _vivekDAG._vtask_clusters[cluster_id]) {
+      for(auto fanout_id : vtask->_fanout) {
+        if(_vivekDAG._vtask_ptrs[fanout_id]->_cluster_id != cluster_id) {
+          _rebuild_vivekDAG._vtask_ptrs[cluster_id]->addFanout(_vivekDAG._vtask_ptrs[fanout_id]->_cluster_id);
+        }
+      }
+    }
+  }
+ 
+  /*
+  // delete replicate fanin/fanout
+  for(size_t i=0; i<_rebuild_vivekDAG._vtask_ptrs.size(); i++) {
+    _rebuild_vivekDAG._vtask_ptrs[i]->deleteRepFan();
+  } 
+  */
+
+  std::cout << "before partition, graph size: " << _vivekDAG._vtask_ptrs.size() << "\n";
+  std::cout << "after GDCA partition, graph size: " << _rebuild_vivekDAG._vtask_ptrs.size() << "\n";
+}
+
+void Timer::_GDCA_build_coarsen_graph_par() {
+
+  // clear _taskflow for building coarsen graph
+  _taskflow.clear();
+ 
+  // each cluster is a tftask 
+  std::vector<tf::Task> tftasks(_vivekDAG._vtask_clusters.size());
+  std::vector<std::pair<bool, Pin*>> empty_pins;
+  for(size_t cluster_id=0; cluster_id<_vivekDAG._vtask_clusters.size(); cluster_id++) {
+    _rebuild_vivekDAG.addVivekTask(cluster_id, 0, empty_pins);
+  }
+  for(size_t cluster_id=0; cluster_id<_vivekDAG._vtask_clusters.size(); cluster_id++) {
+    tftasks[cluster_id] = _taskflow.emplace([this, cluster_id](){
+      for(auto vtask : _vivekDAG._vtask_clusters[cluster_id]) {
+        std::vector<std::pair<bool, Pin*>> rebuild_vtask_pins; 
+        _rebuild_vivekDAG._vtask_ptrs[cluster_id]->addPin(vtask->_pins[0]);
+        for(auto fanout_id : vtask->_fanout) {
+          if(_vivekDAG._vtask_ptrs[fanout_id]->_cluster_id != cluster_id) {
+            _rebuild_vivekDAG._vtask_ptrs[cluster_id]->addFanout(_vivekDAG._vtask_ptrs[fanout_id]->_cluster_id);
+          }
+        }
+      }
+    });  
+  } 
+
+  // add dependencies through _taskflow
+  _executor.run(_taskflow).wait();
+
+}
+
+void Timer::_partition_vivekDAG_GDCA() {
+
+  /*
+   * improve vivek partition by removing checking cycle 
+   */
+
+  auto start = std::chrono::steady_clock::now();
+  _GDCA_dfs();
+  auto end = std::chrono::steady_clock::now();
+  GDCA_dfs_time += std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
+  
+  start = std::chrono::steady_clock::now();
+  _GDCA_build_coarsen_graph_par();
+  end = std::chrono::steady_clock::now();
+  GDCA_build_coarsen_graph_time += std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
+
 }
 
 void Timer::_try_merging(VivekTask* least_cost_task, std::vector<VivekTask*>& local_task_vector, size_t& merge_cnt) {
@@ -2309,46 +2398,6 @@ void Timer::_rebuild_taskflow_GDCA() {
   
   // clear original taskflow
   _taskflow.clear();
-
-  // each cluster in _vtask_clusters stands for a new vtask
-  for(size_t cluster_id=0; cluster_id<_vivekDAG._vtask_clusters.size(); cluster_id++) {
-    int rebuild_vtask_id = cluster_id;
-    int rebuild_vtask_local_cost = 0;
-    std::vector<std::pair<bool, Pin*>> rebuild_vtask_pins; 
-    for(auto vtask : _vivekDAG._vtask_clusters[cluster_id]) {
-      rebuild_vtask_pins.insert(rebuild_vtask_pins.end(), vtask->_pins.begin(), vtask->_pins.end());
-    }
-    _rebuild_vivekDAG.addVivekTask(rebuild_vtask_id, rebuild_vtask_local_cost, rebuild_vtask_pins);
-  }
-
-  // add fanin according to all fanin of vtask inside a cluster
-  for(size_t cluster_id=0; cluster_id<_vivekDAG._vtask_clusters.size(); cluster_id++) {
-    for(auto vtask : _vivekDAG._vtask_clusters[cluster_id]) {
-      for(auto fanin_id : vtask->_fanin) {
-        if(_vivekDAG._vtask_ptrs[fanin_id]->_cluster_id != cluster_id) {
-          _rebuild_vivekDAG._vtask_ptrs[cluster_id]->addFanin(_vivekDAG._vtask_ptrs[fanin_id]->_cluster_id);
-        }
-      }
-    }
-  }
-
-  // add fanout according to all fanout of vtask inside a cluster
-  for(size_t cluster_id=0; cluster_id<_vivekDAG._vtask_clusters.size(); cluster_id++) {
-    for(auto vtask : _vivekDAG._vtask_clusters[cluster_id]) {
-      for(auto fanout_id : vtask->_fanout) {
-        if(_vivekDAG._vtask_ptrs[fanout_id]->_cluster_id != cluster_id) {
-          _rebuild_vivekDAG._vtask_ptrs[cluster_id]->addFanout(_vivekDAG._vtask_ptrs[fanout_id]->_cluster_id);
-        }
-      }
-    }
-  }
-  
-  // delete replicate fanin/fanout
-  for(size_t i=0; i<_rebuild_vivekDAG._vtask_ptrs.size(); i++) {
-    _rebuild_vivekDAG._vtask_ptrs[i]->deleteRepFan();
-  }  
-
-  std::cerr << "after GDCA partition, graph size: " << _rebuild_vivekDAG._vtask_ptrs.size() << "\n";
 
   // emplace all tasks in vivekDAG to _taskflow
   for(auto task : _rebuild_vivekDAG._vtask_ptrs) {

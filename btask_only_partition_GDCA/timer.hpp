@@ -42,7 +42,10 @@ class Timer {
   public:
    
     ~Timer() {
-      
+
+      std::cout << "GDCA partition runtime: " << _partition_DAG_time << "\n";
+      std::cout << "GDCA_dfs_time: " << GDCA_dfs_time << "\n";
+      std::cout << "GDCA_build_coarsen_graph_time: " << GDCA_build_coarsen_graph_time << "\n";
       std::cout << "_vivek_btask_rebuild_time: " << _vivek_btask_rebuild_time << "\n";
       std::cout << "_vivek_btask_runtime: " << _vivek_btask_runtime << "\n";
 
@@ -342,6 +345,9 @@ class Timer {
     size_t _vivek_btask_rebuild_time = 0;
     size_t _vivek_btask_runtime = 0;
 
+    size_t GDCA_dfs_time = 0;
+    size_t GDCA_build_coarsen_graph_time = 0;
+
     VivekDAG _vivekDAG;
     VivekDAG _rebuild_vivekDAG;   
   
@@ -364,7 +370,9 @@ class Timer {
     // partition vivekDAG
     void _partition_vivekDAG();
     void _partition_vivekDAG_GDCA();
-    void _partition_GDCA();
+    void _GDCA_dfs();
+    void _GDCA_build_coarsen_graph();
+    void _GDCA_build_coarsen_graph_par();
 
     // print runtime for each task
     void _task_timing_profile();
