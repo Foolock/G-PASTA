@@ -12,3 +12,6 @@ Replace Opentimer's timer for use
 1. BUGs in btask_only_partition_GDCA
 2. fixed BUGs in btask_only_partition_GDCA
 
+9/27
+1. start to implement GPU of btask_only_partition_GDCA.
+
