@@ -1831,7 +1831,7 @@ void Timer::_GDCA_dfs() {
   } 
 
   // merging parameter
-  size_t dst_cluster_size = 51; // destination cluster size
+  size_t dst_cluster_size = 5; // destination cluster size
   size_t cur_cluster_id = 0; // current cluster id  
   // std::list<int> boundary; // vtasks(id) whose dependents are not fully released
   while(!_global_task_queue_GDCA.empty()) {
@@ -1920,12 +1920,10 @@ void Timer::_GDCA_build_coarsen_graph() {
     }
   }
  
-  /*
   // delete replicate fanin/fanout
   for(size_t i=0; i<_rebuild_vivekDAG._vtask_ptrs.size(); i++) {
     _rebuild_vivekDAG._vtask_ptrs[i]->deleteRepFan();
   } 
-  */
 
   std::cout << "before partition, graph size: " << _vivekDAG._vtask_ptrs.size() << "\n";
   std::cout << "after GDCA partition, graph size: " << _rebuild_vivekDAG._vtask_ptrs.size() << "\n";
@@ -2442,6 +2440,7 @@ size_t Timer::_fill_events_taro() {
    * set an event for its parent and wait this event for itself
    */
 
+  /*
   size_t event = 0;
   for(auto task : _vivekDAG._vtask_ptrs) {
     for(auto successor_id : task->_fanout) {
@@ -2453,7 +2452,36 @@ size_t Timer::_fill_events_taro() {
       }
     } 
   }
+  */
+
+  /*
+   * use this event to build dependency
+   * principle: 
+   * traverse _rebuild_vivekDAG, check fanout of each cluster_task, 
+   * for each fanout(cluster id), traverse cluster_task to see which is the LAST task in this cluster_task has a fanout with that cluster_id   
+   * (To traverse cluster_task, notice tasks in cluster_task are stored in _vivekDAG._vtask_clusters[cluster_task->_id])
+   * once find the LAST task, add set_event to the pin of this task, add wait_event to the pin of the FIRST task in _vivekDAG._vtask_clusters[fanout_id] 
+   */
+  size_t event = 0;
+  for(auto cluster : _rebuild_vivekDAG._vtask_ptrs) {
+    for(auto fanout_cluster_id : cluster->_fanout) {
+      int loc_last_task = 0; // location of the LAST task in this cluster that has a fanout task with cluster_id = fanout_cluster_id
+      for(int task_loc=0; task_loc<_vivekDAG._vtask_clusters[cluster->_id].size(); task_loc++) {
+        for(auto fanout_task_id : _vivekDAG._vtask_clusters[cluster->_id][task_loc]->_fanout) {
+          if(_vivekDAG._vtask_ptrs[fanout_task_id]->_cluster_id == fanout_cluster_id) {
+            loc_last_task = task_loc;
+            break;
+          }
+        }
+      }
+      _vivekDAG._vtask_clusters[cluster->_id][loc_last_task]->_pins[0].second->_set_events.push_back(event);
+      _vivekDAG._vtask_clusters[fanout_cluster_id][0]->_pins[0].second->_wait_events.push_back(event);
+      event ++;
+    }
+  }
   
+  std::cerr << "num_event = " << event << "\n"; 
+
   return event;
 }
 

@@ -44,7 +44,12 @@ class Timer {
    
     ~Timer() {
 
-      std::cout << "taro btask runtime(after partition) : " << GDCA_taro_runtime << "\n";
+      // std::cout << "GDCA partition runtime: " << _partition_DAG_time << "\n";
+      // std::cout << "GDCA_dfs_time: " << GDCA_dfs_time << "\n";
+      // std::cout << "GDCA_build_coarsen_graph_time: " << GDCA_build_coarsen_graph_time << "\n";
+      // std::cout << "_vivek_btask_rebuild_time: " << _vivek_btask_rebuild_time << "\n";
+      // std::cout << "_vivek_btask_runtime: " << _vivek_btask_runtime << "\n";
+      std::cout << "taro runtime (btask) after partition: " << GDCA_taro_runtime << "\n";
 
     }
 
@@ -345,10 +350,10 @@ class Timer {
     size_t _vivek_btask_rebuild_time = 0;
     size_t _vivek_btask_runtime = 0;
 
-    size_t GDCA_taro_runtime = 0;
-
     size_t GDCA_dfs_time = 0;
     size_t GDCA_build_coarsen_graph_time = 0;
+
+    size_t GDCA_taro_runtime = 0;
 
     VivekDAG _vivekDAG;
     VivekDAG _rebuild_vivekDAG;   
