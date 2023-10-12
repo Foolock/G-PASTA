@@ -1,2 +1,1 @@
-1. GDCA version of btask_only will use depth as merging metric
-2. implemented build_coarsen_graph_GDCA in parallel using _taskflow 
+1. implement GPU search for topological order -> queue atomic version
