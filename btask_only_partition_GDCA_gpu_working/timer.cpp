@@ -1021,7 +1021,7 @@ void Timer::_update_timing() {
   _export_csr();
 
   // call cuda kernel
-  call_cuda();
+  call_cuda_topo_centric_vector();
 
   // partition vivekDAG
   auto start = std::chrono::steady_clock::now();

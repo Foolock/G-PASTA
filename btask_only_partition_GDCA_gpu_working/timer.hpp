@@ -146,7 +146,8 @@ class Timer {
     /*
      * GDCA partition
      */
-    void call_cuda();
+    void call_cuda_topo_2queue();
+    void call_cuda_topo_centric_vector();
     void bfs_cpu(std::vector<int>& distance, std::vector<int>& parent);
     void topo_cpu(std::vector<int>& dep_size);
 

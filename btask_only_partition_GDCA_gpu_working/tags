@@ -15,6 +15,7 @@ Arc	arc.cpp	/^Arc::Arc(Pin& from, Pin& to, TimingView t) : $/;"	f	class:ot::Arc
 Arc	arc.hpp	/^class Arc {$/;"	c	namespace:ot
 At	pin.cpp	/^Pin::At::At(Arc* a, Split el, Tran rf, float v) : $/;"	f	class:ot::Pin::At
 At	pin.hpp	/^  struct At {$/;"	s	class:ot::Pin
+BLOCK_SIZE	cuda_test.cu	/^#define BLOCK_SIZE /;"	d	file:
 BPROP_CAND	pin.hpp	/^  constexpr static int BPROP_CAND       = 0x02;$/;"	m	class:ot::Pin	typeref:typename:int
 Clock	clock.cpp	/^Clock::Clock(const std::string& name, Pin& source, float period) :$/;"	f	class:ot::Clock
 Clock	clock.cpp	/^Clock::Clock(const std::string& name, float period) : $/;"	f	class:ot::Clock
@@ -212,8 +213,9 @@ __pins	sfxt.hpp	/^    inline thread_local static std::vector<size_t> __pins;$/;"
 __spfa	sfxt.hpp	/^    inline thread_local static std::vector<std::optional<bool>>   __spfa;$/;"	m	class:ot::SfxtCache	typeref:typename:thread_local std::vector<std::optional<bool>>
 __tree	sfxt.hpp	/^    inline thread_local static std::vector<std::optional<size_t>> __tree;$/;"	m	class:ot::SfxtCache	typeref:typename:thread_local std::vector<std::optional<size_t>>
 _add_to_lineage	timer.cpp	/^void Timer::_add_to_lineage(tf::Task task) {$/;"	f	class:ot::Timer	typeref:typename:void
-_adjncy	timer.hpp	/^    std::vector<int> _adjncy;$/;"	m	class:ot::Timer	typeref:typename:std::vector<int>
-_adjp	timer.hpp	/^    std::vector<int> _adjp; $/;"	m	class:ot::Timer	typeref:typename:std::vector<int>
+_adjncy	timer.hpp	/^    std::vector<int> _adjncy; \/\/ flatterned adjacency list$/;"	m	class:ot::Timer	typeref:typename:std::vector<int>
+_adjncy_size	timer.hpp	/^    std::vector<int> _adjncy_size; \/\/ number of edges of each node$/;"	m	class:ot::Timer	typeref:typename:std::vector<int>
+_adjp	timer.hpp	/^    std::vector<int> _adjp; \/\/ edge offset $/;"	m	class:ot::Timer	typeref:typename:std::vector<int>
 _after_crit_cost	vivek.hpp	/^      int _after_crit_cost = 0;$/;"	m	class:ot::VivekTask	typeref:typename:int
 _arc	test.hpp	/^    Arc& _arc;$/;"	m	class:ot::Test	typeref:typename:Arc &
 _arc_idx_gen	timer.hpp	/^    IndexGenerator<size_t> _arc_idx_gen {0u};$/;"	m	class:ot::Timer	typeref:typename:IndexGenerator<size_t>
@@ -274,6 +276,7 @@ _delay	net.hpp	/^    TimingData<float, MAX_TRAN, MAX_SPLIT> _delay  ;$/;"	m	clas
 _delta_at	pin.cpp	/^std::optional<float> Pin::_delta_at(Split lel, Tran lrf, Split rel, Tran rrf) const {$/;"	f	class:ot::Pin	typeref:typename:std::optional<float>
 _delta_rat	pin.cpp	/^std::optional<float> Pin::_delta_rat(Split lel, Tran lrf, Split rel, Tran rrf) const {$/;"	f	class:ot::Pin	typeref:typename:std::optional<float>
 _delta_slew	pin.cpp	/^std::optional<float> Pin::_delta_slew(Split lel, Tran lrf, Split rel, Tran rrf) const {$/;"	f	class:ot::Pin	typeref:typename:std::optional<float>
+_dep_size	timer.hpp	/^    std::vector<int> _dep_size; \/\/ number of dependents of each node$/;"	m	class:ot::Timer	typeref:typename:std::vector<int>
 _dfs_form_cycle	timer.cpp	/^void Timer::_dfs_form_cycle(VivekTask* start, VivekTask* end) {$/;"	f	class:ot::Timer	typeref:typename:void
 _dfs_topo_order	timer.cpp	/^void Timer::_dfs_topo_order(int start, std::stack<int>& top_down_result, std::queue<int>& bottom/;"	f	class:ot::Timer	typeref:typename:void
 _disconnect_pin	timer.cpp	/^void Timer::_disconnect_pin(Pin& pin) {$/;"	f	class:ot::Timer	typeref:typename:void
@@ -566,6 +569,8 @@ _to_voltage_unit	unit.cpp	/^void Timer::_to_voltage_unit(const volt_t& unit) {$/
 _top	pfxt.cpp	/^PfxtNode* PfxtCache::_top() const {$/;"	f	class:ot::PfxtCache	typeref:typename:PfxtNode *
 _top_down_topo_order_cur_vivekDAG	timer.hpp	/^    std::stack<int> _top_down_topo_order_cur_vivekDAG; \/\/ topological order from top to bottom/;"	m	class:ot::Timer	typeref:typename:std::stack<int>
 _top_down_topo_order_cur_vivekDAG_vector	timer.hpp	/^    std::vector<int> _top_down_topo_order_cur_vivekDAG_vector; \/\/ topological order from top t/;"	m	class:ot::Timer	typeref:typename:std::vector<int>
+_topo_result_cpu	timer.hpp	/^    std::vector<int> _topo_result_cpu;$/;"	m	class:ot::Timer	typeref:typename:std::vector<int>
+_topo_result_gpu	timer.hpp	/^    std::vector<int> _topo_result_gpu;$/;"	m	class:ot::Timer	typeref:typename:std::vector<int>
 _topologize	sfxt.cpp	/^void Timer::_topologize(SfxtCache& sfxt, size_t v) const {$/;"	f	class:ot::Timer	typeref:typename:void
 _try_merging	timer.cpp	/^void Timer::_try_merging(VivekTask* least_cost_task, std::vector<VivekTask*>& local_task_vector,/;"	f	class:ot::Timer	typeref:typename:void
 _try_merging_time	timer.hpp	/^    size_t _try_merging_time = 0;$/;"	m	class:ot::Timer	typeref:typename:size_t
@@ -608,12 +613,17 @@ arc	test.cpp	/^const Arc& Test::arc() const {$/;"	f	class:ot::Test	typeref:typen
 arcs	timer.hpp	/^inline const auto& Timer::arcs() const {$/;"	f	class:ot::Timer	typeref:typename:const auto &
 at	path.hpp	/^  float at;           \/\/ arrival$/;"	m	struct:ot::Point	typeref:typename:float
 at	pin.cpp	/^std::optional<float> Pin::at(Split el, Tran rf) const {$/;"	f	class:ot::Pin	typeref:typename:std::optional<float>
+bfs_cpu	cuda_test.cu	/^void Timer::bfs_cpu(std::vector<int>& distance, std::vector<int>& parent) {$/;"	f	typeref:typename:void Timer::
+bfs_gpu_atomic_queue	cuda_test.cu	/^__global__ void bfs_gpu_atomic_queue($/;"	f	typeref:typename:void
+call_cuda_topo_2queue	cuda_test.cu	/^void Timer::call_cuda_topo_2queue() {$/;"	f	typeref:typename:void Timer::
+call_cuda_topo_centric_vector	cuda_test.cu	/^void Timer::call_cuda_topo_centric_vector() {$/;"	f	typeref:typename:void Timer::
 cap	net.cpp	/^float RctNode::cap(Split el, Tran rf) const {$/;"	f	class:ot::RctNode	typeref:typename:float
 cap	pin.cpp	/^float Pin::cap(Split el, Tran rf) const {$/;"	f	class:ot::Pin	typeref:typename:float
 capacitance_unit	timer.hpp	/^inline auto Timer::capacitance_unit() const {$/;"	f	class:ot::Timer	typeref:typename:auto
 cell_name	gate.cpp	/^const std::string& Gate::cell_name() const {$/;"	f	class:ot::Gate	typeref:typename:const std::string &
 cell_voltage	timer.hpp	/^inline std::optional<float> Timer::cell_voltage() const {$/;"	f	class:ot::Timer	typeref:typename:std::optional<float>
 cellpin	pin.hpp	/^inline const Cellpin* Pin::cellpin(Split m) const {$/;"	f	class:ot::Pin	typeref:typename:const Cellpin *
+checkError	cuda_test.cu	/^void checkError(cudaError_t error, std::string msg) {$/;"	f	typeref:typename:void
 clocks	timer.hpp	/^inline const auto& Timer::clocks() const {$/;"	f	class:ot::Timer	typeref:typename:const auto &
 connect_pin	timer.cpp	/^Timer& Timer::connect_pin(std::string pin, std::string net) {$/;"	f	class:ot::Timer	typeref:typename:Timer &
 constrained_pin	test.cpp	/^const Pin& Test::constrained_pin() const {$/;"	f	class:ot::Test	typeref:typename:const Pin &
@@ -844,6 +854,7 @@ slew	pin.cpp	/^std::optional<float> Pin::slew(Split el, Tran rf) const {$/;"	f	c
 split	endpoint.hpp	/^inline Split Endpoint::split() const {$/;"	f	class:ot::Endpoint	typeref:typename:Split
 split	sfxt.hpp	/^inline Split SfxtCache::split() const {$/;"	f	class:ot::SfxtCache	typeref:typename:Split
 test	endpoint.hpp	/^inline const Test* Endpoint::test() const {$/;"	f	class:ot::Endpoint	typeref:typename:const Test *
+test_kernel	cuda_test.cu	/^__global__ void test_kernel() {$/;"	f	typeref:typename:void
 tests	timer.hpp	/^inline const auto& Timer::tests() const {$/;"	f	class:ot::Timer	typeref:typename:const auto &
 through	path.hpp	/^  std::vector<std::string> through;$/;"	m	struct:ot::PathGuide	typeref:typename:std::vector<std::string>
 time_unit	timer.hpp	/^inline auto Timer::time_unit() const {$/;"	f	class:ot::Timer	typeref:typename:auto
@@ -852,6 +863,9 @@ to	arc.hpp	/^inline const Pin& Arc::to() const {$/;"	f	class:ot::Arc	typeref:typ
 to	path.hpp	/^  std::vector<std::string> to;$/;"	m	struct:ot::PathGuide	typeref:typename:std::vector<std::string>
 to	pfxt.hpp	/^  size_t to;$/;"	m	struct:ot::PfxtNode	typeref:typename:size_t
 top	path.cpp	/^Path* PathHeap::top() const {$/;"	f	class:ot::PathHeap	typeref:typename:Path *
+topo_cpu	cuda_test.cu	/^void Timer::topo_cpu(std::vector<int>& dep_size) {$/;"	f	typeref:typename:void Timer::
+topo_gpu_atomic_2queue	cuda_test.cu	/^__global__ void topo_gpu_atomic_2queue($/;"	f	typeref:typename:void
+topo_gpu_atomic_centric_vector	cuda_test.cu	/^__global__ void topo_gpu_atomic_centric_vector($/;"	f	typeref:typename:void
 total_ncap	net.cpp	/^float Rct::total_ncap() const {$/;"	f	class:ot::Rct	typeref:typename:float
 transition	endpoint.hpp	/^inline Tran Endpoint::transition() const {$/;"	f	class:ot::Endpoint	typeref:typename:Tran
 transition	path.hpp	/^  Tran  transition;   \/\/ rise\/fall$/;"	m	struct:ot::Point	typeref:typename:Tran

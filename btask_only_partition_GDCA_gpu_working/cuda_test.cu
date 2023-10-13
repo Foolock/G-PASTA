@@ -45,7 +45,6 @@ __global__ void bfs_gpu_atomic_queue(
 
   if(tid < rqueue_size) {
     int cur_id = read_queue[tid];
-    int next_cost = d_distance[cur_id] + 1;
 
     for(int offset=d_adjp[cur_id]; offset<d_adjp[cur_id] + d_adjncy_size[cur_id]; offset++) {
       int neighbor_id = d_adjncy[offset];
@@ -58,7 +57,7 @@ __global__ void bfs_gpu_atomic_queue(
   }
 }
 
-__global__ void topo_gpu_atomic_queue(
+__global__ void topo_gpu_atomic_2queue(
   int* d_adjp, int* d_adjncy, int* d_adjncy_size, int* d_dep_size,
   int* read_queue, int* write_queue,
   int rqueue_size, int* wqueue_size
@@ -79,6 +78,45 @@ __global__ void topo_gpu_atomic_queue(
         write_queue[position] = neighbor_id;
       }
     }
+  }
+}
+
+// all the read and write will be perform straightly on d_topo_result_gpu
+__global__ void topo_gpu_atomic_centric_vector(
+  int* d_adjp, int* d_adjncy, int* d_adjncy_size, int* d_dep_size,
+  int* d_topo_result_gpu,
+  int read_offset, int read_size, // [read_offset, read_offset + read_size - 1] are all the frontiers 
+  int* write_size
+) {
+
+  int tid = blockDim.x * blockIdx.x + threadIdx.x;
+
+  if(tid < read_size) {
+    int cur_id = d_topo_result_gpu[read_offset + tid];
+    for(int offset=d_adjp[cur_id]; offset<d_adjp[cur_id] + d_adjncy_size[cur_id]; offset++) {
+      int neighbor_id = d_adjncy[offset];
+      if(neighbor_id == -1) { // if _adjncy[offset] = -1, it means it has no fanout
+        continue;
+      }
+      atomicSub(&d_dep_size[neighbor_id], 1);
+      if(atomicMax(&d_dep_size[neighbor_id], 0) == 0) {
+        int position = atomicAdd(write_size, 1); // no need to atomic here...
+        d_topo_result_gpu[read_offset + read_size + position] = neighbor_id;        
+      }
+    }
+  }
+}
+
+__global__ void check_d_topo_result_gpu(int* d_topo_result_gpu, int num_nodes) {
+  
+  int tid = blockDim.x * blockIdx.x + threadIdx.x;
+  
+  if(tid == 0) {
+    printf("after pushed, d_topo_result_gpu(threadId = %d) = ", tid);
+    for(int i=0; i<num_nodes; i++) {
+      printf("%d ", d_topo_result_gpu[i]);
+    }
+    printf("\n");
   }
 }
 
@@ -138,7 +176,7 @@ void Timer::topo_cpu(std::vector<int>& dep_size) {
   }
 }
 
-void Timer::call_cuda() {
+void Timer::call_cuda_topo_2queue() {
 
   /*
   std::vector<int> parent(num_nodes); // used to store topological order(is it correct)
@@ -205,7 +243,7 @@ void Timer::call_cuda() {
     num_block = (num_nodes + rqueue_size - 1) / rqueue_size; 
 
     // use kernal as global synchronization for one level. results are stored in write_queue
-    topo_gpu_atomic_queue<<<num_block, BLOCK_SIZE>>>(
+    topo_gpu_atomic_2queue<<<num_block, BLOCK_SIZE>>>(
       d_adjp, d_adjncy, d_adjncy_size, d_dep_size,
       read_queue, write_queue,
       rqueue_size, wqueue_size
@@ -218,13 +256,15 @@ void Timer::call_cuda() {
     checkError(cudaMemcpy(tmp_result.data(), write_queue, sizeof(int)*rqueue_size, cudaMemcpyDeviceToHost), "write back result failed");
     _topo_result_gpu.insert(_topo_result_gpu.end(), tmp_result.begin(), tmp_result.end());
 
+    std::cout << "rqueue_size" << rqueue_size << "\n";
+
     checkError(cudaMemset(wqueue_size, 0, sizeof(int)), "wqueue_size rewrite failed"); 
    
     // swap write_queue and read_queue
     std::swap(read_queue, write_queue);
   }
 
-  // print cpu topo result
+  // print gpu topo result
   std::cout << "_topo_result_gpu = [";
   for(auto id : _topo_result_gpu) {
     std::cout << id << " ";
@@ -248,6 +288,96 @@ void Timer::call_cuda() {
   checkError(cudaFree(&write_queue), "write_queue free failed");
   checkError(cudaFree(&wqueue_size), "wqueue_size free failed");
   */
+}
+
+void Timer::call_cuda_topo_centric_vector() {
+  
+  /*
+   * topological order cpu version
+   */
+  std::vector<int> dep_size = _dep_size;
+  topo_cpu(dep_size);
+  // print cpu topo result
+  std::cout << "_topo_result_cpu = [";
+  for(auto id : _topo_result_cpu) {
+    std::cout << id << " ";
+  }
+  std::cout << "]\n";
+  
+  /*
+   * topological order gpu version
+   */
+  unsigned num_nodes = _adjp.size();
+  unsigned num_edges = _adjncy.size();
+
+  std::vector<int> source;
+  for(int id=0; id<_adjp.size(); id++) {
+    if(_vivekDAG._vtask_ptrs[id]->_fanin.size() == 0) {
+      source.push_back(id);
+    }
+  }
+
+  int* d_adjp; 
+  int* d_adjncy; 
+  int* d_adjncy_size;
+  int* d_dep_size;
+  int* d_topo_result_gpu;
+  int read_offset = 0;
+  int read_size = source.size();
+  int* write_size;
+  // reshape _topo_result_gpu
+  _topo_result_gpu.resize(num_nodes);
+   
+  checkError(cudaMalloc(&d_adjp, sizeof(int)*num_nodes), "d_adjp allocation failed");
+  checkError(cudaMalloc(&d_adjncy, sizeof(int)*num_edges), "d_adjncy allocation failed");
+  checkError(cudaMalloc(&d_adjncy_size, sizeof(int)*num_nodes), "d_adjncy_size allocation failed");
+  checkError(cudaMalloc(&d_dep_size, sizeof(int)*num_nodes), "d_dep_size allocation failed");
+  checkError(cudaMalloc(&d_topo_result_gpu, sizeof(int)*num_nodes), "d_topo_result_gpu allocation failed");
+  checkError(cudaMalloc(&write_size, sizeof(int)), "write_size allocation failed");
+
+  checkError(cudaMemcpy(d_adjp, _adjp.data(), sizeof(int)*num_nodes, cudaMemcpyHostToDevice), "d_adjp memcpy failed"); 
+  checkError(cudaMemcpy(d_adjncy, _adjncy.data(), sizeof(int)*num_edges, cudaMemcpyHostToDevice), "d_adjncy memcpy failed"); 
+  checkError(cudaMemcpy(d_adjncy_size, _adjncy_size.data(), sizeof(int)*num_nodes, cudaMemcpyHostToDevice), "d_adjncy_size memcpy failed"); 
+  checkError(cudaMemcpy(d_dep_size, _dep_size.data(), sizeof(int)*num_nodes, cudaMemcpyHostToDevice), "d_dep_size memcpy failed"); 
+  checkError(cudaMemcpy(d_topo_result_gpu, source.data(), sizeof(int)*source.size(), cudaMemcpyHostToDevice), "d_topo_result_gpu memcpy failed"); 
+  checkError(cudaMemset(write_size, 0, sizeof(int)), "write_size memset failed");
+
+  // invoke kernel
+  unsigned num_block;
+  while(read_size > 0) { 
+    num_block = (num_nodes + read_size - 1) / read_size;
+
+    // use kernal as global synchronization for one level. results are stored in d_topo_result_gpu 
+    topo_gpu_atomic_centric_vector<<<num_block, BLOCK_SIZE>>>(
+      d_adjp, d_adjncy, d_adjncy_size, d_dep_size,
+      d_topo_result_gpu,
+      read_offset, read_size, // [read_offset, read_offset + read_size - 1] are all the frontiers 
+      write_size
+    );
+   
+    // calculate where to read for next iteration
+    read_offset += read_size;
+    checkError(cudaMemcpy(&read_size, write_size, sizeof(int), cudaMemcpyDeviceToHost), "queue_size memcpy failed");
+
+    // set write_size = 0 for next iteration 
+    checkError(cudaMemset(write_size, 0, sizeof(int)), "write_size rewrite failed");
+  }
+
+  checkError(cudaMemcpy(_topo_result_gpu.data(), d_topo_result_gpu, sizeof(int)*num_nodes, cudaMemcpyDeviceToHost), "_topo_result_gpu memcpy failed"); 
+
+  // print gpu topo result
+  std::cout << "_topo_result_gpu = [";
+  for(auto id : _topo_result_gpu) {
+    std::cout << id << " ";
+  }
+  std::cout << "]\n"; 
+
+  cudaFree(&d_adjp);
+  cudaFree(&d_adjncy);
+  cudaFree(&d_adjncy_size);
+  cudaFree(&d_dep_size);
+  cudaFree(&d_topo_result_gpu);
+  cudaFree(&write_size);
 }
 
 };  // end of namespace ot. -----------------------------------------------------------------------
