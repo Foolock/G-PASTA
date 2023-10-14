@@ -43,11 +43,8 @@ class Timer {
    
     ~Timer() {
 
-      std::cout << "GDCA partition runtime: " << _partition_DAG_time << "\n";
-      std::cout << "GDCA_dfs_time: " << GDCA_dfs_time << "\n";
-      std::cout << "GDCA_build_coarsen_graph_time: " << GDCA_build_coarsen_graph_time << "\n";
-      std::cout << "_vivek_btask_rebuild_time: " << _vivek_btask_rebuild_time << "\n";
-      std::cout << "_vivek_btask_runtime: " << _vivek_btask_runtime << "\n";
+      std::cout << "CPU_topo_runtime: " << CPU_topo_runtime << "\n";
+      std::cout << "GPU_topo_runtime: " << GPU_topo_runtime << "\n";
 
     }
 
@@ -356,6 +353,9 @@ class Timer {
     size_t GDCA_dfs_time = 0;
     size_t GDCA_build_coarsen_graph_time = 0;
 
+    size_t CPU_topo_runtime = 0;
+    size_t GPU_topo_runtime = 0;
+
     VivekDAG _vivekDAG;
     VivekDAG _rebuild_vivekDAG;   
 
@@ -385,6 +385,9 @@ class Timer {
 
     // export csr format of vivekDAG
     void _export_csr();
+
+    // run update_timing sequentially according to topo order result from GPU
+    void _run_topo_gpu();
 
     // partition vivekDAG
     void _partition_vivekDAG();

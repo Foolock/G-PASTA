@@ -17,6 +17,7 @@ At	pin.cpp	/^Pin::At::At(Arc* a, Split el, Tran rf, float v) : $/;"	f	class:ot::
 At	pin.hpp	/^  struct At {$/;"	s	class:ot::Pin
 BLOCK_SIZE	cuda_test.cu	/^#define BLOCK_SIZE /;"	d	file:
 BPROP_CAND	pin.hpp	/^  constexpr static int BPROP_CAND       = 0x02;$/;"	m	class:ot::Pin	typeref:typename:int
+CPU_topo_runtime	timer.hpp	/^    size_t CPU_topo_runtime = 0;$/;"	m	class:ot::Timer	typeref:typename:size_t
 Clock	clock.cpp	/^Clock::Clock(const std::string& name, Pin& source, float period) :$/;"	f	class:ot::Clock
 Clock	clock.cpp	/^Clock::Clock(const std::string& name, float period) : $/;"	f	class:ot::Clock
 Clock	clock.hpp	/^class Clock {$/;"	c	namespace:ot
@@ -36,6 +37,7 @@ FPROP_CAND	pin.hpp	/^  constexpr static int FPROP_CAND       = 0x01;$/;"	m	class
 FULL_TIMING	timer.hpp	/^  constexpr static int FULL_TIMING   = 0x01;$/;"	m	class:ot::Timer	typeref:typename:int
 GDCA_build_coarsen_graph_time	timer.hpp	/^    size_t GDCA_build_coarsen_graph_time = 0;$/;"	m	class:ot::Timer	typeref:typename:size_t
 GDCA_dfs_time	timer.hpp	/^    size_t GDCA_dfs_time = 0;$/;"	m	class:ot::Timer	typeref:typename:size_t
+GPU_topo_runtime	timer.hpp	/^    size_t GPU_topo_runtime = 0;$/;"	m	class:ot::Timer	typeref:typename:size_t
 Gate	gate.cpp	/^Gate::Gate(const std::string& name, CellView cell) : $/;"	f	class:ot::Gate
 Gate	gate.hpp	/^class Gate {$/;"	c	namespace:ot
 IN_BPROP_STACK	pin.hpp	/^  constexpr static int IN_BPROP_STACK   = 0x08;$/;"	m	class:ot::Pin	typeref:typename:int
@@ -156,13 +158,12 @@ __anon5bcecbf71402	timer.cpp	/^  auto op = _taskflow.emplace([this, name=std::mo
 __anon5bcecbf71502	timer.cpp	/^  auto task = _taskflow.emplace([this, name=std::move(name), m, t, v] () {$/;"	f	function:ot::Timer::set_slew	file:
 __anon5bcecbf71602	timer.cpp	/^  auto task = _taskflow.emplace([this, name=std::move(name), m, t, v] () {$/;"	f	function:ot::Timer::set_load	file:
 __anon5bcecbf71702	timer.cpp	/^  std::sort(_global_task_vector.begin(), _global_task_vector.end(), [](const VivekTask* a, Vivek/;"	f	function:ot::Timer::_initialize_vivekDAG	file:
-__anon5bcecbf71802	timer.cpp	/^    task->_tftask = _taskflow.emplace([this, task] () {$/;"	f	function:ot::Timer::_export_csr	file:
-__anon5bcecbf71902	timer.cpp	/^    std::sort(local_task_vector.begin(), local_task_vector.end(), [](const VivekTask* a, VivekTa/;"	f	function:ot::Timer::_partition_vivekDAG	file:
-__anon5bcecbf71a02	timer.cpp	/^    tftasks[cluster_id] = _taskflow.emplace([this, cluster_id](){$/;"	f	function:ot::Timer::_GDCA_build_coarsen_graph_par	file:
-__anon5bcecbf71b02	timer.cpp	/^  auto it = std::lower_bound(_global_task_vector.begin(), _global_task_vector.end(), merged_vtas/;"	f	function:ot::Timer::_insert_merged_vivekTask	file:
-__anon5bcecbf71c02	timer.cpp	/^    pin->_ftask = _taskflow.emplace([this, pin] () {$/;"	f	function:ot::Timer::_rebuild_ftask	file:
-__anon5bcecbf71d02	timer.cpp	/^      task->_tftask = _taskflow.emplace([this, task] () {$/;"	f	function:ot::Timer::_rebuild_taskflow_vivek	file:
-__anon5bcecbf71e02	timer.cpp	/^    task->_tftask = _taskflow.emplace([this, task] () {$/;"	f	function:ot::Timer::_rebuild_taskflow_GDCA	file:
+__anon5bcecbf71802	timer.cpp	/^    std::sort(local_task_vector.begin(), local_task_vector.end(), [](const VivekTask* a, VivekTa/;"	f	function:ot::Timer::_partition_vivekDAG	file:
+__anon5bcecbf71902	timer.cpp	/^    tftasks[cluster_id] = _taskflow.emplace([this, cluster_id](){$/;"	f	function:ot::Timer::_GDCA_build_coarsen_graph_par	file:
+__anon5bcecbf71a02	timer.cpp	/^  auto it = std::lower_bound(_global_task_vector.begin(), _global_task_vector.end(), merged_vtas/;"	f	function:ot::Timer::_insert_merged_vivekTask	file:
+__anon5bcecbf71b02	timer.cpp	/^    pin->_ftask = _taskflow.emplace([this, pin] () {$/;"	f	function:ot::Timer::_rebuild_ftask	file:
+__anon5bcecbf71c02	timer.cpp	/^      task->_tftask = _taskflow.emplace([this, task] () {$/;"	f	function:ot::Timer::_rebuild_taskflow_vivek	file:
+__anon5bcecbf71d02	timer.cpp	/^    task->_tftask = _taskflow.emplace([this, task] () {$/;"	f	function:ot::Timer::_rebuild_taskflow_GDCA	file:
 __anon5c3c37ad0102	celllib.cpp	/^  auto parser = _taskflow.emplace([path=std::move(path), lib] () {$/;"	f	function:ot::Timer::read_celllib	file:
 __anon5c3c37ad0202	celllib.cpp	/^  auto reader = _taskflow.emplace([this, lib, el] () {$/;"	f	function:ot::Timer::read_celllib	file:
 __anon6933335b0102	sfxt.cpp	/^  return std::visit([this, &ept] (auto&& handle) {$/;"	f	function:ot::Timer::_sfxt_cache	file:
@@ -508,6 +509,7 @@ _resistance_unit	timer.hpp	/^    std::optional<ohm_t> _resistance_unit;$/;"	m	cl
 _rf	endpoint.hpp	/^    Tran _rf;$/;"	m	class:ot::Endpoint	typeref:typename:Tran
 _root	net.hpp	/^    Pin* _root {nullptr};$/;"	m	class:ot::Net	typeref:typename:Pin *
 _root	net.hpp	/^    RctNode* _root {nullptr};$/;"	m	class:ot::Rct	typeref:typename:RctNode *
+_run_topo_gpu	timer.cpp	/^void Timer::_run_topo_gpu() {$/;"	f	class:ot::Timer	typeref:typename:void
 _run_vivekDAG_GDCA_seq	timer.cpp	/^void Timer::_run_vivekDAG_GDCA_seq() {$/;"	f	class:ot::Timer	typeref:typename:void
 _runtime	vivek.hpp	/^      size_t _runtime; $/;"	m	class:ot::VivekTask	typeref:typename:size_t
 _satellite	arc.hpp	/^    std::optional<std::list<Arc>::iterator> _satellite;$/;"	m	class:ot::Arc	typeref:typename:std::optional<std::list<Arc>::iterator>
@@ -624,6 +626,7 @@ cell_name	gate.cpp	/^const std::string& Gate::cell_name() const {$/;"	f	class:ot
 cell_voltage	timer.hpp	/^inline std::optional<float> Timer::cell_voltage() const {$/;"	f	class:ot::Timer	typeref:typename:std::optional<float>
 cellpin	pin.hpp	/^inline const Cellpin* Pin::cellpin(Split m) const {$/;"	f	class:ot::Pin	typeref:typename:const Cellpin *
 checkError	cuda_test.cu	/^void checkError(cudaError_t error, std::string msg) {$/;"	f	typeref:typename:void
+check_d_topo_result_gpu	cuda_test.cu	/^__global__ void check_d_topo_result_gpu(int* d_topo_result_gpu, int num_nodes) {$/;"	f	typeref:typename:void
 clocks	timer.hpp	/^inline const auto& Timer::clocks() const {$/;"	f	class:ot::Timer	typeref:typename:const auto &
 connect_pin	timer.cpp	/^Timer& Timer::connect_pin(std::string pin, std::string net) {$/;"	f	class:ot::Timer	typeref:typename:Timer &
 constrained_pin	test.cpp	/^const Pin& Test::constrained_pin() const {$/;"	f	class:ot::Test	typeref:typename:const Pin &
