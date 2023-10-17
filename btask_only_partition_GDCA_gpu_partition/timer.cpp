@@ -1769,40 +1769,40 @@ void Timer::_initialize_vivekDAG() {
 void Timer::_export_csr() {
 
   // check DAG
-  // // clear original taskflow
-  // _taskflow.clear();
+  // clear original taskflow
+  _taskflow.clear();
 
-  // // emplace all tasks in vivekDAG to _taskflow
-  // for(auto task : _vivekDAG._vtask_ptrs) {
-  //   task->_tftask = _taskflow.emplace([this, task] () {
-  //     auto start = std::chrono::steady_clock::now();
-  //     for(auto pair : task->_pins) {
-  //       if(pair.first) {
-  //         _fprop_rc_timing(*(pair.second));
-  //         _fprop_slew(*(pair.second));
-  //         _fprop_delay(*(pair.second));
-  //         _fprop_at(*(pair.second));
-  //         _fprop_test(*(pair.second));
-  //       }
-  //       else {
-  //         _bprop_rat(*(pair.second));
-  //       }
-  //     }
-  //     auto end = std::chrono::steady_clock::now();
-  //     task->_runtime = std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
-  //   // }).name(std::to_string(task->_id));
-  //   }).name(task->_pins[0].second->_name + "(" + std::to_string(task->_id) + ")");
-  // }
+  // emplace all tasks in vivekDAG to _taskflow
+  for(auto task : _vivekDAG._vtask_ptrs) {
+    task->_tftask = _taskflow.emplace([this, task] () {
+      auto start = std::chrono::steady_clock::now();
+      for(auto pair : task->_pins) {
+        if(pair.first) {
+          _fprop_rc_timing(*(pair.second));
+          _fprop_slew(*(pair.second));
+          _fprop_delay(*(pair.second));
+          _fprop_at(*(pair.second));
+          _fprop_test(*(pair.second));
+        }
+        else {
+          _bprop_rat(*(pair.second));
+        }
+      }
+      auto end = std::chrono::steady_clock::now();
+      task->_runtime = std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
+    // }).name(std::to_string(task->_id));
+    }).name(task->_pins[0].second->_name + "(" + std::to_string(task->_id) + ")");
+  }
 
-  // // add dependencies in _taskflow
-  // for(size_t task_id=0; task_id<_vivekDAG._vtask_ptrs.size(); task_id++) {
-  //   for(auto successor_id : _vivekDAG._vtask_ptrs[task_id]->_fanout) {
-  //       _vivekDAG._vtask_ptrs[task_id]->_tftask.precede(_vivekDAG._vtask_ptrs[successor_id]->_tftask);
-  //   }
-  // } 
+  // add dependencies in _taskflow
+  for(size_t task_id=0; task_id<_vivekDAG._vtask_ptrs.size(); task_id++) {
+    for(auto successor_id : _vivekDAG._vtask_ptrs[task_id]->_fanout) {
+        _vivekDAG._vtask_ptrs[task_id]->_tftask.precede(_vivekDAG._vtask_ptrs[successor_id]->_tftask);
+    }
+  } 
 
-  // _taskflow.dump(std::cout);
-  // _taskflow.clear();
+  _taskflow.dump(std::cout);
+  _taskflow.clear();
 
   /*
    * export csr matrices of vivekDAG

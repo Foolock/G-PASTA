@@ -22,7 +22,13 @@ void checkError_t(cudaError_t error, std::string msg) {
     }
 }
 
-__global__ void check_result_gpu(int* d_topo_result_gpu, int num_nodes, uint32_t* write_size) {
+__global__ void check_result_gpu(
+  int* d_topo_result_gpu, 
+  int* d_partition_result_gpu,
+  int* d_partition_counter_gpu,
+  int* max_partition_id,
+  int num_nodes, uint32_t* write_size
+) {
 
   int tid = blockDim.x * blockIdx.x + threadIdx.x;
 
@@ -32,7 +38,18 @@ __global__ void check_result_gpu(int* d_topo_result_gpu, int num_nodes, uint32_t
       printf("%d ", d_topo_result_gpu[i]);
     }
     printf("\n");
+    printf("after pushed, d_partition_result_gpu(threadId = %d) = ", tid);
+    for(int i=0; i<num_nodes; i++) {
+      printf("%d ", d_partition_result_gpu[i]);
+    }
+    printf("\n");
+    printf("after pushed, d_partition_counter_gpu(threadId = %d) = ", tid);
+    for(int i=0; i<num_nodes; i++) {
+      printf("%d ", d_partition_counter_gpu[i]);
+    }
+    printf("\n");
     printf("write_size = %d\n", *write_size);
+    printf("max_partition_id = %d\n", *max_partition_id);
   }
 }
 
@@ -43,7 +60,7 @@ __global__ void partition_gpu_atomic_centric_vector(
   int* d_partition_result_gpu,
   int* d_partition_counter_gpu,
   int partition_size,
-  uint32_t* max_partition_id,
+  int* max_partition_id,
   int read_offset, uint32_t read_size, // [read_offset, read_offset + read_size - 1] are all the frontiers 
   uint32_t* write_size
 ) {
@@ -66,14 +83,14 @@ __global__ void partition_gpu_atomic_centric_vector(
                                                                                      // notice partition_counter will be 5 when it is full(cuz we still add 1 in if condition) 
           d_partition_result_gpu[neighbor_id] = cur_partition; // no need to atomic here cuz only one thread will access this neighbor here
         }
-        /*
         else {
-          uint32_t new_partition_id = atomicAdd(max_partition_id, 1) + 1; // now we have new partition when we find cur_partition is full
-                                                                          // we need to store this new partition id locally to the thread
+          int new_partition_id = atomicAdd(max_partition_id, 1) + 1; // now we have new partition when we find cur_partition is full
+                                                                     // we need to store this new partition id locally to the thread
+          // printf("max_partition_id = %d\n", *max_partition_id);
+          // printf("new_partition_id = %d\n", new_partition_id);
           d_partition_result_gpu[neighbor_id] = new_partition_id;
           d_partition_counter_gpu[new_partition_id]++;  
         }
-        */
       }
     }
   }
@@ -104,6 +121,8 @@ void Timer::call_cuda_partition() {
   int read_offset = 0;
   uint32_t read_size = source.size();
   uint32_t* write_size;
+  int* max_partition_id; // max_partition id we have currently, initially is source.size() - 1
+  
   // reshape _topo_result_gpu
   _topo_result_gpu.resize(num_nodes);
 
@@ -118,8 +137,8 @@ void Timer::call_cuda_partition() {
   // also initialize _partition_counter_gpu
   // _partition_counter_gpu[i] means the number of nodes in partition i 
   // the number of partition = (num_nodes + partition_size - 1) / partition_size
-  uint32_t* max_partition_id; // max_partition id we have currently, initially is source.size() - 1
-  _partition_counter_gpu.resize((num_nodes + partition_size - 1) / partition_size, 0);
+  // _partition_counter_gpu.resize((num_nodes + partition_size - 1) / partition_size, 0);
+  _partition_counter_gpu.resize(num_nodes, 0);
   for(unsigned i=0; i<source.size(); i++) { // at the beginning, each source corresponds to one partition
     _partition_counter_gpu[i]++;
   }
@@ -130,9 +149,9 @@ void Timer::call_cuda_partition() {
   checkError_t(cudaMalloc(&d_dep_size, sizeof(int)*num_nodes), "d_dep_size allocation failed");
   checkError_t(cudaMalloc(&d_topo_result_gpu, sizeof(int)*num_nodes), "d_topo_result_gpu allocation failed");
   checkError_t(cudaMalloc(&d_partition_result_gpu, sizeof(int)*num_nodes), "d_partition_result_gpu allocation failed");
-  checkError_t(cudaMalloc(&d_partition_counter_gpu, sizeof(int)*_partition_counter_gpu.size()), "d_partition_counter_gpu allocation failed");
+  checkError_t(cudaMalloc(&d_partition_counter_gpu, sizeof(int)*num_nodes), "d_partition_counter_gpu allocation failed");
   checkError_t(cudaMalloc(&write_size, sizeof(uint32_t)), "write_size allocation failed");
-  checkError_t(cudaMalloc(&max_partition_id, sizeof(uint32_t)), "max_partition_id allocation failed");
+  checkError_t(cudaMalloc(&max_partition_id, sizeof(int)), "max_partition_id allocation failed");
 
   auto start = std::chrono::steady_clock::now();
   checkError_t(cudaMemcpy(d_adjp, _adjp.data(), sizeof(int)*num_nodes, cudaMemcpyHostToDevice), "d_adjp memcpy failed"); 
@@ -141,9 +160,12 @@ void Timer::call_cuda_partition() {
   checkError_t(cudaMemcpy(d_dep_size, _dep_size.data(), sizeof(int)*num_nodes, cudaMemcpyHostToDevice), "d_dep_size memcpy failed"); 
   checkError_t(cudaMemcpy(d_topo_result_gpu, source.data(), sizeof(int)*source.size(), cudaMemcpyHostToDevice), "d_topo_result_gpu memcpy failed"); 
   checkError_t(cudaMemcpy(d_partition_result_gpu, _partition_result_gpu.data(), sizeof(int)*num_nodes, cudaMemcpyHostToDevice), "d_partition_result_gpu memcpy failed"); 
-  checkError_t(cudaMemcpy(d_partition_counter_gpu, _partition_counter_gpu.data(), sizeof(int)*_partition_counter_gpu.size(), cudaMemcpyHostToDevice), "d_partition_counter_gpu memcpy failed"); 
+  checkError_t(cudaMemcpy(d_partition_counter_gpu, _partition_counter_gpu.data(), sizeof(int)*num_nodes, cudaMemcpyHostToDevice), "d_partition_counter_gpu memcpy failed"); 
   checkError_t(cudaMemset(write_size, 0, sizeof(uint32_t)), "write_size memset failed");
-  checkError_t(cudaMemset(max_partition_id, source.size() - 1, sizeof(uint32_t)), "max_partition_id memset failed");
+  int max_partition_id_cpu = source.size() - 1;
+  // checkError_t(cudaMemset(max_partition_id, 0x00000001, sizeof(int)), "max_partition_id memset failed");
+  checkError_t(cudaMemcpy(max_partition_id, &max_partition_id_cpu, sizeof(int), cudaMemcpyHostToDevice), "max_partition_id memcpy failed"); 
+
 
   // invoke kernel
   unsigned num_block;
@@ -169,8 +191,21 @@ void Timer::call_cuda_partition() {
       read_offset, read_size, // [read_offset, read_offset + read_size - 1] are all the frontiers 
       write_size
     );
-   
-    // check_result_gpu<<<1, 1>>>(d_topo_result_gpu, read_offset + read_size, write_size);
+
+    cudaError_t err = cudaGetLastError();
+    if (err != cudaSuccess) {
+      printf("Error: %s\n", cudaGetErrorString(err));
+    }
+  
+    /*
+    check_result_gpu<<<1, 1>>>(
+      d_topo_result_gpu,
+      d_partition_result_gpu,
+      d_partition_counter_gpu,
+      max_partition_id,
+      num_nodes, write_size
+    );
+    */
 
     // calculate where to read for next iteration
     read_offset += read_size;
@@ -187,11 +222,16 @@ void Timer::call_cuda_partition() {
   GPU_topo_runtime += std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
 
   // print gpu topo result
-  // std::cout << "_topo_result_gpu = [";
-  // for(auto id : _topo_result_gpu) {
-  //   std::cout << id << " ";
-  // }
-  // std::cout << "]\n"; 
+  std::cout << "_topo_result_gpu = [";
+  for(auto id : _topo_result_gpu) {
+    std::cout << id << " ";
+  }
+  std::cout << "]\n"; 
+  std::cout << "_partition_result_gpu = [";
+  for(auto partition : _partition_result_gpu) {
+    std::cout << partition << " ";
+  }
+  std::cout << "]\n"; 
 
   checkError_t(cudaFree(d_adjp), "d_adjp free failed");
   checkError_t(cudaFree(d_adjncy), "d_adjncy free failed");
