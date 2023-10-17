@@ -215,11 +215,13 @@ void Timer::call_cuda_partition() {
     checkError_t(cudaMemset(write_size, 0, sizeof(uint32_t)), "write_size rewrite failed");
   }
 
-  checkError_t(cudaMemcpy(_topo_result_gpu.data(), d_topo_result_gpu, sizeof(int)*num_nodes, cudaMemcpyDeviceToHost), "_topo_result_gpu memcpy failed"); 
   checkError_t(cudaMemcpy(_partition_result_gpu.data(), d_partition_result_gpu, sizeof(int)*num_nodes, cudaMemcpyDeviceToHost), "_partition_result_gpu memcpy failed"); 
  
   auto end = std::chrono::steady_clock::now();
   GPU_topo_runtime += std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
+  checkError_t(cudaMemcpy(_topo_result_gpu.data(), d_topo_result_gpu, sizeof(int)*num_nodes, cudaMemcpyDeviceToHost), "_topo_result_gpu memcpy failed"); 
+  checkError_t(cudaMemcpy(&max_partition_id_cpu, max_partition_id, sizeof(int), cudaMemcpyDeviceToHost), "max_partition_id_cpu memcpy failed"); 
+  _total_num_partitions = max_partition_id_cpu + 1;
 
   // print gpu topo result
   std::cout << "_topo_result_gpu = [";
@@ -232,6 +234,7 @@ void Timer::call_cuda_partition() {
     std::cout << partition << " ";
   }
   std::cout << "]\n"; 
+  std::cout << "_total_num_partitions = " << _total_num_partitions << "\n";
 
   checkError_t(cudaFree(d_adjp), "d_adjp free failed");
   checkError_t(cudaFree(d_adjncy), "d_adjncy free failed");

@@ -370,6 +370,7 @@ class Timer {
     std::vector<int> _topo_result_gpu;
     std::vector<int> _partition_result_gpu;
     std::vector<int> _partition_counter_gpu;
+    int _total_num_partitions = 0;
 
     std::stack<int> _top_down_topo_order_cur_vivekDAG; // topological order from top to bottom for current DAG
     std::vector<int> _top_down_topo_order_cur_vivekDAG_vector; // topological order from top to bottom for current DAG
@@ -396,8 +397,10 @@ class Timer {
     // partition vivekDAG
     void _partition_vivekDAG();
     void _partition_vivekDAG_GDCA();
+    void _partition_vivekDAG_GDCA_gpu();
     void _GDCA_dfs();
     void _GDCA_build_coarsen_graph();
+    void _GDCA_build_coarsen_graph_gpu();
     void _GDCA_build_coarsen_graph_par();
 
     // print runtime for each task
