@@ -80,6 +80,10 @@ namespace ot {
       bool _merged = false; // indicate this task has been merged, 
                             // merged indicates this task is no longer in vivekDAG
       bool _pushed = false;
+
+      // for check_DAG_cycle
+      bool _visited = false;
+      bool _instack = false;
   };
 
   class VivekDAG {

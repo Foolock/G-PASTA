@@ -1026,6 +1026,9 @@ void Timer::_update_timing() {
   // partition vivekDAG on GPU
   _partition_vivekDAG_GDCA_gpu();
 
+  // run btask sequentially 
+  // _run_topo_gpu();
+
   /*
   // partition vivekDAG
   auto start = std::chrono::steady_clock::now();
@@ -1762,40 +1765,40 @@ void Timer::_initialize_vivekDAG() {
 void Timer::_export_csr() {
 
   // check DAG
-  // // clear original taskflow
-  // _taskflow.clear();
+  // clear original taskflow
+  _taskflow.clear();
 
-  // // emplace all tasks in vivekDAG to _taskflow
-  // for(auto task : _vivekDAG._vtask_ptrs) {
-  //   task->_tftask = _taskflow.emplace([this, task] () {
-  //     auto start = std::chrono::steady_clock::now();
-  //     for(auto pair : task->_pins) {
-  //       if(pair.first) {
-  //         _fprop_rc_timing(*(pair.second));
-  //         _fprop_slew(*(pair.second));
-  //         _fprop_delay(*(pair.second));
-  //         _fprop_at(*(pair.second));
-  //         _fprop_test(*(pair.second));
-  //       }
-  //       else {
-  //         _bprop_rat(*(pair.second));
-  //       }
-  //     }
-  //     auto end = std::chrono::steady_clock::now();
-  //     task->_runtime = std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
-  //   // }).name(std::to_string(task->_id));
-  //   }).name(task->_pins[0].second->_name + "(" + std::to_string(task->_id) + ")");
-  // }
+  // emplace all tasks in vivekDAG to _taskflow
+  for(auto task : _vivekDAG._vtask_ptrs) {
+    task->_tftask = _taskflow.emplace([this, task] () {
+      auto start = std::chrono::steady_clock::now();
+      for(auto pair : task->_pins) {
+        if(pair.first) {
+          _fprop_rc_timing(*(pair.second));
+          _fprop_slew(*(pair.second));
+          _fprop_delay(*(pair.second));
+          _fprop_at(*(pair.second));
+          _fprop_test(*(pair.second));
+        }
+        else {
+          _bprop_rat(*(pair.second));
+        }
+      }
+      auto end = std::chrono::steady_clock::now();
+      task->_runtime = std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
+    }).name(std::to_string(task->_id));
+    // }).name(task->_pins[0].second->_name + "(" + std::to_string(task->_id) + ")");
+  }
 
-  // // add dependencies in _taskflow
-  // for(size_t task_id=0; task_id<_vivekDAG._vtask_ptrs.size(); task_id++) {
-  //   for(auto successor_id : _vivekDAG._vtask_ptrs[task_id]->_fanout) {
-  //       _vivekDAG._vtask_ptrs[task_id]->_tftask.precede(_vivekDAG._vtask_ptrs[successor_id]->_tftask);
-  //   }
-  // } 
+  // add dependencies in _taskflow
+  for(size_t task_id=0; task_id<_vivekDAG._vtask_ptrs.size(); task_id++) {
+    for(auto successor_id : _vivekDAG._vtask_ptrs[task_id]->_fanout) {
+        _vivekDAG._vtask_ptrs[task_id]->_tftask.precede(_vivekDAG._vtask_ptrs[successor_id]->_tftask);
+    }
+  } 
 
-  // _taskflow.dump(std::cout);
-  // _taskflow.clear();
+  _taskflow.dump(std::cout);
+  _taskflow.clear();
 
   /*
    * export csr matrices of vivekDAG
@@ -1819,6 +1822,9 @@ void Timer::_export_csr() {
   }
   for(size_t i=0; i<_vivekDAG._vtask_ptrs.size(); i++) {
     _dep_size.push_back(_vivekDAG._vtask_ptrs[i]->_fanin.size()); 
+  }
+  for(size_t i=0; i<_vivekDAG._vtask_ptrs.size(); i++) {
+    _suc_size.push_back(_vivekDAG._vtask_ptrs[i]->_fanout.size()); 
   }
 
   // check csr
@@ -2093,16 +2099,26 @@ void Timer::_partition_vivekDAG_GDCA_gpu() {
   // get _rebuild_vivekDAG according to GPU result
   _GDCA_build_coarsen_graph_gpu(); 
 
-  // run btask sequentially 
-  // _run_topo_gpu();
-
+  // check legitness of DAG
+  bool result = _check_DAG_cycle();
+  if(result) {
+    std::cerr << "this rebuild vivekDAG has cycle.\n";
+    std::exit(EXIT_FAILURE);
+  }
+  std::cout << "_total_task_visited = " << _total_task_visited << "\n";
 }
 
 void Timer::_GDCA_build_coarsen_graph_gpu() {
 
-  // put _partition_result_gpu into _vivekDAG._vtask_clusters
-  _vivekDAG._vtask_clusters.resize(_total_num_partitions);
+  // assigned cluster_id to each vtask in _vivekDAG according to _partition_result_gpu
   for(size_t task_id=0; task_id<_partition_result_gpu.size(); task_id++) {
+    VivekTask* task_ptr = _vivekDAG._vtask_ptrs[task_id];
+    task_ptr->_cluster_id = _partition_result_gpu[task_id];
+  }
+
+  // traverse _topo_result_gpu, assigned _vivekDAG._vtask_clusters -> such as to ensure each cluster has topological order
+  _vivekDAG._vtask_clusters.resize(_total_num_partitions);
+  for(auto task_id : _topo_result_gpu) {
     VivekTask* task_ptr = _vivekDAG._vtask_ptrs[task_id];
     _vivekDAG._vtask_clusters[_partition_result_gpu[task_id]].push_back(task_ptr); 
   }
@@ -2113,8 +2129,8 @@ void Timer::_GDCA_build_coarsen_graph_gpu() {
     int rebuild_vtask_local_cost = 0;
     std::vector<std::pair<bool, Pin*>> rebuild_vtask_pins;
     for(auto vtask : _vivekDAG._vtask_clusters[cluster_id]) {
-      rebuild_vtask_pins.insert(rebuild_vtask_pins.end(), vtask->_pins.begin(), vtask->_pins.end());
-      // rebuild_vtask_pins.push_back(vtask->_pins[0]); // in GDCA, each vtask only has one pin
+      // rebuild_vtask_pins.insert(rebuild_vtask_pins.end(), vtask->_pins.begin(), vtask->_pins.end());
+      rebuild_vtask_pins.push_back(vtask->_pins[0]); // in GDCA, each vtask only has one pin
     }
     _rebuild_vivekDAG.addVivekTask(rebuild_vtask_id, rebuild_vtask_local_cost, rebuild_vtask_pins);
   }
@@ -2624,10 +2640,72 @@ void Timer::_rebuild_taskflow_GDCA() {
   // add dependencies in _taskflow
   for(size_t task_id=0; task_id<_rebuild_vivekDAG._vtask_ptrs.size(); task_id++) {
     for(auto successor_id : _rebuild_vivekDAG._vtask_ptrs[task_id]->_fanout) {
-        _rebuild_vivekDAG._vtask_ptrs[task_id]->_tftask.precede(_rebuild_vivekDAG._vtask_ptrs[successor_id]->_tftask);
+      _rebuild_vivekDAG._vtask_ptrs[task_id]->_tftask.precede(_rebuild_vivekDAG._vtask_ptrs[successor_id]->_tftask);
+    }
+  }
+}
+
+bool Timer::_check_DAG_cycle() {
+
+  // check rebuild vivekDAG
+  // std::cerr << "tasks of rebuild vivekDAG:\n";
+  // for(auto vtask : _rebuild_vivekDAG._vtask_ptrs) {
+  //   std::cerr << "task " << vtask->_id << " 's fanout = {";
+  //   for(auto task_id : vtask->_fanout) {
+  //     std::cerr << task_id << " ";
+  //   }
+  //   std::cerr << "}\n";
+  // }
+
+  // first check total amount of pins
+  int num_pins = 0;
+  for(auto vtask : _rebuild_vivekDAG._vtask_ptrs) {
+    num_pins += vtask->_pins.size();
+  }
+  std::cerr << "total number of pins in _rebuild_vivekDAG = " << num_pins << "\n";
+
+  // Call the recursive helper function
+  // to detect cycle in different DFS trees
+  for(auto vtask : _rebuild_vivekDAG._vtask_ptrs) {
+    if(!vtask->_visited && _isCyclicUtil(vtask)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+bool Timer::_isCyclicUtil(VivekTask* vtask) {
+
+  if(!vtask->_visited) {
+    // Mark the current node as visited
+    // and part of recursion stack
+    vtask->_visited = true;
+    _total_task_visited++;
+    vtask->_instack = true;
+
+    // Recur for all the vertices adjacent to this
+    // vertex
+    for(auto successor_id : vtask->_fanout) {
+      VivekTask* successor = _rebuild_vivekDAG._vtask_ptrs[successor_id];
+      if(!successor->_visited && _isCyclicUtil(successor)) {
+        return true;
+      }
+      else if(successor->_instack) {
+        std::cerr << "successor " << successor->_id << " revisited.\n";
+        std::cerr << "its fanout is: ";
+        for(auto task_id : successor->_fanout) {
+          std::cerr << task_id << " ";
+        }
+        std::cerr << "\n";
+        return true;
+      }
     }
   }
   
+  // Remove the vertex from recursion stack
+  vtask->_instack = false;
+  return false;
 }
 
 void Timer::_run_vivekDAG_GDCA_seq() {
@@ -2695,12 +2773,18 @@ void Timer::_reset_partition() {
   _adjncy.clear();
   _adjncy_size.clear();
   _dep_size.clear(); // number of dependents of each node
+  _suc_size.clear(); // number of successors of each node
   
   _topo_result_cpu.clear();
   _topo_result_gpu.clear();
   _partition_result_gpu.clear();
+  _partition_result_cpu.clear();
+  _partition_counter_gpu.clear();
+  _partition_counter_cpu.clear();
 
   _total_num_partitions = 0;
+
+  _total_task_visited = 0;
 
   for(auto pin : _frontiers) {
     pin->_fvisited = false;

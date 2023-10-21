@@ -149,6 +149,7 @@ class Timer {
     void bfs_cpu(std::vector<int>& distance, std::vector<int>& parent);
     void topo_cpu(std::vector<int>& dep_size);
     int partition_size = 4;
+    void partition_cpu(std::vector<int>& dep_size, std::vector<int>& partition_result_cpu, std::vector<int>& partition_counter_cpu); 
 
   private:
 
@@ -366,10 +367,13 @@ class Timer {
     std::vector<int> _adjncy; // flatterned adjacency list
     std::vector<int> _adjncy_size; // number of edges of each node
     std::vector<int> _dep_size; // number of dependents of each node
+    std::vector<int> _suc_size; // number of successors of each node
     std::vector<int> _topo_result_cpu;
     std::vector<int> _topo_result_gpu;
     std::vector<int> _partition_result_gpu;
+    std::vector<int> _partition_result_cpu;
     std::vector<int> _partition_counter_gpu;
+    std::vector<int> _partition_counter_cpu;
     int _total_num_partitions = 0;
 
     std::stack<int> _top_down_topo_order_cur_vivekDAG; // topological order from top to bottom for current DAG
@@ -438,6 +442,11 @@ class Timer {
     void _rebuild_taskflow_vivek();
     void _rebuild_taskflow_GDCA();
     void _run_vivekDAG_GDCA_seq(); // run GDCA partitioned vivekDAG sequentially
+
+    // check if DAG has cycle
+    bool _check_DAG_cycle();
+    bool _isCyclicUtil(VivekTask* vtask);
+    int _total_task_visited = 0;
 
     // rebuild ftask part of _taskflow
     void _rebuild_ftask();
