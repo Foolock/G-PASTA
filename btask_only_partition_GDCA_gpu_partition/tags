@@ -103,6 +103,7 @@ VivekDAG	vivek.hpp	/^  class VivekDAG {$/;"	c	namespace:ot
 VivekTask	vivek.hpp	/^      VivekTask( $/;"	f	class:ot::VivekTask
 VivekTask	vivek.hpp	/^  class VivekTask {$/;"	c	namespace:ot
 _GDCA_build_coarsen_graph	timer.cpp	/^void Timer::_GDCA_build_coarsen_graph() {$/;"	f	class:ot::Timer	typeref:typename:void
+_GDCA_build_coarsen_graph_cpu	timer.cpp	/^void Timer::_GDCA_build_coarsen_graph_cpu() {$/;"	f	class:ot::Timer	typeref:typename:void
 _GDCA_build_coarsen_graph_gpu	timer.cpp	/^void Timer::_GDCA_build_coarsen_graph_gpu() {$/;"	f	class:ot::Timer	typeref:typename:void
 _GDCA_build_coarsen_graph_par	timer.cpp	/^void Timer::_GDCA_build_coarsen_graph_par() {$/;"	f	class:ot::Timer	typeref:typename:void
 _GDCA_dfs	timer.cpp	/^void Timer::_GDCA_dfs() {$/;"	f	class:ot::Timer	typeref:typename:void
@@ -422,11 +423,14 @@ _nodes	pfxt.hpp	/^    std::vector<std::unique_ptr<PfxtNode>> _nodes;$/;"	m	class
 _num_deps_release	vivek.hpp	/^      size_t _num_deps_release = 0;$/;"	m	class:ot::VivekTask	typeref:typename:size_t
 _num_visited	vivek.hpp	/^      int _num_visited = 0; $/;"	m	class:ot::VivekTask	typeref:typename:int
 _partition_DAG_time	timer.hpp	/^    size_t _partition_DAG_time = 0;$/;"	m	class:ot::Timer	typeref:typename:size_t
+_partition_counter_cpu	timer.hpp	/^    std::vector<int> _partition_counter_cpu;$/;"	m	class:ot::Timer	typeref:typename:std::vector<int>
 _partition_counter_gpu	timer.hpp	/^    std::vector<int> _partition_counter_gpu;$/;"	m	class:ot::Timer	typeref:typename:std::vector<int>
+_partition_result_cpu	timer.hpp	/^    std::vector<int> _partition_result_cpu;$/;"	m	class:ot::Timer	typeref:typename:std::vector<int>
 _partition_result_gpu	timer.hpp	/^    std::vector<int> _partition_result_gpu;$/;"	m	class:ot::Timer	typeref:typename:std::vector<int>
 _partition_timing_profile	timer.cpp	/^void Timer::_partition_timing_profile() {$/;"	f	class:ot::Timer	typeref:typename:void
 _partition_vivekDAG	timer.cpp	/^void Timer::_partition_vivekDAG() {$/;"	f	class:ot::Timer	typeref:typename:void
 _partition_vivekDAG_GDCA	timer.cpp	/^void Timer::_partition_vivekDAG_GDCA() {$/;"	f	class:ot::Timer	typeref:typename:void
+_partition_vivekDAG_GDCA_cpu	timer.cpp	/^void Timer::_partition_vivekDAG_GDCA_cpu() {$/;"	f	class:ot::Timer	typeref:typename:void
 _partition_vivekDAG_GDCA_gpu	timer.cpp	/^void Timer::_partition_vivekDAG_GDCA_gpu() {$/;"	f	class:ot::Timer	typeref:typename:void
 _paths	path.hpp	/^    std::vector<std::unique_ptr<Path>> _paths;$/;"	m	class:ot::PathHeap	typeref:typename:std::vector<std::unique_ptr<Path>>
 _paths	pfxt.hpp	/^    std::vector<std::unique_ptr<PfxtNode>> _paths;$/;"	m	class:ot::PfxtCache	typeref:typename:std::vector<std::unique_ptr<PfxtNode>>
@@ -560,6 +564,7 @@ _srcs	sfxt.hpp	/^    std::unordered_map<size_t, std::optional<float>> _srcs;$/;"
 _state	arc.hpp	/^    int _state {0};$/;"	m	class:ot::Arc	typeref:typename:int
 _state	pin.hpp	/^    int _state {0};$/;"	m	class:ot::Pin	typeref:typename:int
 _state	timer.hpp	/^    int _state {0};$/;"	m	class:ot::Timer	typeref:typename:int
+_suc_size	timer.hpp	/^    std::vector<int> _suc_size; \/\/ number of successors of each node$/;"	m	class:ot::Timer	typeref:typename:std::vector<int>
 _task_timing_profile	timer.cpp	/^void Timer::_task_timing_profile() {$/;"	f	class:ot::Timer	typeref:typename:void
 _taskflow	timer.hpp	/^    tf::Taskflow _taskflow;$/;"	m	class:ot::Timer	typeref:typename:tf::Taskflow
 _tests	gate.hpp	/^    std::vector<Test*> _tests;$/;"	m	class:ot::Gate	typeref:typename:std::vector<Test * >
@@ -583,6 +588,7 @@ _topo_result_cpu	timer.hpp	/^    std::vector<int> _topo_result_cpu;$/;"	m	class:
 _topo_result_gpu	timer.hpp	/^    std::vector<int> _topo_result_gpu;$/;"	m	class:ot::Timer	typeref:typename:std::vector<int>
 _topologize	sfxt.cpp	/^void Timer::_topologize(SfxtCache& sfxt, size_t v) const {$/;"	f	class:ot::Timer	typeref:typename:void
 _total_num_partitions	timer.hpp	/^    int _total_num_partitions = 0;$/;"	m	class:ot::Timer	typeref:typename:int
+_total_task_visited	timer.hpp	/^    int _total_task_visited = 0;$/;"	m	class:ot::Timer	typeref:typename:int
 _try_merging	timer.cpp	/^void Timer::_try_merging(VivekTask* least_cost_task, std::vector<VivekTask*>& local_task_vector,/;"	f	class:ot::Timer	typeref:typename:void
 _try_merging_time	timer.hpp	/^    size_t _try_merging_time = 0;$/;"	m	class:ot::Timer	typeref:typename:size_t
 _unloop	scc.cpp	/^void SCC::_unloop() {$/;"	f	class:ot::SCC	typeref:typename:void
@@ -783,7 +789,7 @@ ot	unit.cpp	/^namespace ot {$/;"	n	file:
 ot	verilog.cpp	/^namespace ot {$/;"	n	file:
 ot	vivek.hpp	/^namespace ot {$/;"	n
 parent	pfxt.hpp	/^  const PfxtNode* parent {nullptr};$/;"	m	struct:ot::PfxtNode	typeref:typename:const PfxtNode *
-partition_gpu_atomic_centric_vector	partition_cuda.cu	/^__global__ void partition_gpu_atomic_centric_vector($/;"	f	typeref:typename:void
+partition_cpu	partition_cuda.cu	/^void Timer::partition_cpu(std::vector<int>& dep_size, std::vector<int>& partition_result_cpu, st/;"	f	typeref:typename:void Timer::
 partition_size	timer.hpp	/^    int partition_size = 4;$/;"	m	class:ot::Timer	typeref:typename:int
 period	clock.hpp	/^inline float Clock::period() const {$/;"	f	class:ot::Clock	typeref:typename:float
 pi	pin.hpp	/^inline auto Pin::At::pi() const {$/;"	f	class:ot::Pin::At	typeref:typename:auto
@@ -873,6 +879,7 @@ split	endpoint.hpp	/^inline Split Endpoint::split() const {$/;"	f	class:ot::Endp
 split	sfxt.hpp	/^inline Split SfxtCache::split() const {$/;"	f	class:ot::SfxtCache	typeref:typename:Split
 test	endpoint.hpp	/^inline const Test* Endpoint::test() const {$/;"	f	class:ot::Endpoint	typeref:typename:const Test *
 test_kernel	topo_cuda.cu	/^__global__ void test_kernel() {$/;"	f	typeref:typename:void
+testing_kernel_2	partition_cuda.cu	/^__global__ void testing_kernel_2($/;"	f	typeref:typename:void
 tests	timer.hpp	/^inline const auto& Timer::tests() const {$/;"	f	class:ot::Timer	typeref:typename:const auto &
 through	path.hpp	/^  std::vector<std::string> through;$/;"	m	struct:ot::PathGuide	typeref:typename:std::vector<std::string>
 time_unit	timer.hpp	/^inline auto Timer::time_unit() const {$/;"	f	class:ot::Timer	typeref:typename:auto

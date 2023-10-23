@@ -149,7 +149,7 @@ class Timer {
     void bfs_cpu(std::vector<int>& distance, std::vector<int>& parent);
     void topo_cpu(std::vector<int>& dep_size);
     int partition_size = 4;
-    void partition_cpu(std::vector<int>& dep_size, std::vector<int>& partition_result_cpu, std::vector<int>& partition_counter_cpu); 
+    void partition_cpu(std::vector<int>& dep_size, std::vector<int>& partition_result_cpu, std::vector<int>& partition_counter_cpu, int* max_partition_id); 
 
   private:
 
@@ -374,7 +374,8 @@ class Timer {
     std::vector<int> _partition_result_cpu;
     std::vector<int> _partition_counter_gpu;
     std::vector<int> _partition_counter_cpu;
-    int _total_num_partitions = 0;
+    int _total_num_partitions_cpu = 0;
+    int _total_num_partitions_gpu = 0;
 
     std::stack<int> _top_down_topo_order_cur_vivekDAG; // topological order from top to bottom for current DAG
     std::vector<int> _top_down_topo_order_cur_vivekDAG_vector; // topological order from top to bottom for current DAG
@@ -400,11 +401,13 @@ class Timer {
 
     // partition vivekDAG
     void _partition_vivekDAG();
-    void _partition_vivekDAG_GDCA();
+    void _partition_vivekDAG_GDCA(); // older version of GDCA implementation
+    void _partition_vivekDAG_GDCA_cpu();
     void _partition_vivekDAG_GDCA_gpu();
     void _GDCA_dfs();
-    void _GDCA_build_coarsen_graph();
+    void _GDCA_build_coarsen_graph();  
     void _GDCA_build_coarsen_graph_gpu();
+    void _GDCA_build_coarsen_graph_cpu();
     void _GDCA_build_coarsen_graph_par();
 
     // print runtime for each task

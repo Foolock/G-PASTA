@@ -23,7 +23,46 @@ void checkError_t(cudaError_t error, std::string msg) {
     }
 }
 
-void Timer::partition_cpu(std::vector<int>& dep_size, std::vector<int>& partition_result_cpu, std::vector<int>& partition_counter_cpu) {
+void Timer::partition_cpu(std::vector<int>& dep_size, std::vector<int>& partition_result_cpu, std::vector<int>& partition_counter_cpu, int* max_partition_id) {
+
+  // find roots
+  std::queue<int> to_visit;
+  for(unsigned id=0; id<_adjp.size(); id++) {
+    if(_vivekDAG._vtask_ptrs[id]->_fanin.size() == 0) {
+      _topo_result_cpu.push_back(id);
+      to_visit.push(id);
+    }
+  }
+  
+  auto start = std::chrono::steady_clock::now();
+  while(!to_visit.empty()) {
+    int cur_id = to_visit.front();
+    to_visit.pop();
+    for(int offset=_adjp[cur_id]; offset<_adjp[cur_id] + _adjncy_size[cur_id]; offset++) {
+      int neighbor_id = _adjncy[offset];
+      if(neighbor_id == -1) { // if _adjncy[offset] = -1, it means it has no fanout
+        continue;
+      }
+      dep_size[neighbor_id] --;
+      if(dep_size[neighbor_id] == 0) {
+        _topo_result_cpu.push_back(neighbor_id);
+        to_visit.push(neighbor_id);
+        int cur_partition = partition_result_cpu[cur_id];
+        if(partition_counter_cpu[cur_partition] < partition_size) {
+          partition_result_cpu[neighbor_id] = cur_partition;
+          partition_counter_cpu[cur_partition]++;
+        }
+        else {
+          (*max_partition_id)++;
+          int new_partition_id = *max_partition_id; 
+          partition_result_cpu[neighbor_id] = new_partition_id;
+          partition_counter_cpu[new_partition_id]++;
+        }
+      }
+    }
+  }
+  auto end = std::chrono::steady_clock::now();
+  CPU_topo_runtime += std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
 
 }
 
@@ -34,12 +73,14 @@ __global__ void check_result_gpu(
   int* max_partition_id,
   int num_nodes, uint32_t* write_size,
   int* d_distance,
-  int* d_parent
+  int* d_parent,
+  int* d_level
 ) {
 
   int tid = blockDim.x * blockIdx.x + threadIdx.x;
 
   if(tid == 0) {
+    printf("checking ---------------------------------------\n");
     printf("after pushed, d_topo_result_gpu(threadId = %d) = ", tid);
     for(int i=0; i<num_nodes; i++) {
       printf("%d ", d_topo_result_gpu[i]);
@@ -67,11 +108,16 @@ __global__ void check_result_gpu(
       printf("%d ", d_parent[i]);
     }
     printf("\n");
+    printf("after pushed, d_level(threadId = %d) = ", tid);
+    for(int i=0; i<num_nodes; i++) {
+      printf("%d ", d_level[i]);
+    }
+    printf("\n");
+    printf("\n");
+    printf("\n");
   }
 }
 
-/*
-// testing kernel  
 __global__ void testing_kernel(
   int* d_adjp, int* d_adjncy, int* d_adjncy_size, int* d_dep_size,
   int* d_topo_result_gpu,
@@ -80,47 +126,54 @@ __global__ void testing_kernel(
   int partition_size,
   int* max_partition_id,
   int read_offset, uint32_t read_size, // [read_offset, read_offset + read_size - 1] are all the frontiers 
-  uint32_t* write_size
+  uint32_t* write_size,
+  int* d_distance,
+  int* d_parent,
+  int* d_level
 ) {
 
   uint32_t tid = blockDim.x * blockIdx.x + threadIdx.x;
 
-  for(int offset = 0; offset < read_size; offset++) {
-    if(tid == 0) {
-      int cur_id = d_topo_result_gpu[read_offset + tid + offset]; // get current task id
-      for(int offset=d_adjp[cur_id]; offset<d_adjp[cur_id] + d_adjncy_size[cur_id]; offset++) {
-        int neighbor_id = d_adjncy[offset];
-        if(neighbor_id == -1) { // if _adjncy[offset] = -1, it means it has no fanout
-          continue;
+  if(tid < read_size) {
+    int cur_id = d_topo_result_gpu[read_offset + tid]; // get current task id
+    for(int offset=d_adjp[cur_id]; offset<d_adjp[cur_id] + d_adjncy_size[cur_id]; offset++) {
+      int neighbor_id = d_adjncy[offset];
+      if(neighbor_id == -1) { // if _adjncy[offset] = -1, it means it has no fanout
+        continue;
+      }
+      // for each neighbor, assign d_level for it
+      // atomicMax(&d_level[neighbor_id], d_level[cur_id] + 1);
+      // atomicMin(&d_distance[neighbor_id], d_distance[cur_id]+1);
+      // for each neighbor, assign d_distance for it
+      if(atomicMin(&d_distance[neighbor_id], d_distance[cur_id]+1) >= d_distance[cur_id]+1) { // if neighbor_id is updated, store this into parents  
+        atomicMin(&d_parent[neighbor_id], cur_id);
+      }
+      if(atomicSub(&d_dep_size[neighbor_id], 1) == 1) {
+        int position = atomicAdd(write_size, 1); // no need to atomic here...
+        d_topo_result_gpu[read_offset + read_size + position] = neighbor_id;        
+        // also check if this partition id is full, if not, set this neighbor with the same id as its parent, if so, start a new partition id for this neighbor
+        // int cur_partition = d_partition_result_gpu[d_parent[neighbor_id]]; // get the partition id of the parent that gives this neighbor the shortest path
+        int cur_partition = d_partition_result_gpu[cur_id]; // get the partition id of the parent that gives this neighbor the shortest path
+        if(atomicAdd(&d_partition_counter_gpu[cur_partition], 1) < partition_size && cur_id == d_parent[neighbor_id]) { 
+          // printf("d_level[d_parent[neighbor_id]] = %d, d_level[neighbor_id] = %d\n", d_level[d_parent[neighbor_id]], d_level[neighbor_id]);
+          d_partition_result_gpu[neighbor_id] = cur_partition; // no need to atomic here cuz only one thread will access this neighbor here
         }
-        if(atomicSub(&d_dep_size[neighbor_id], 1) == 1) {
-          int position = atomicAdd(write_size, 1); // no need to atomic here...
-          d_topo_result_gpu[read_offset + read_size + position] = neighbor_id;        
-          // also check if this partition id is full, if not, set this neighbor with the same id as its parent, if so, start a new partition id for this neighbor
-          int cur_partition = d_partition_result_gpu[cur_id]; // get partition id of current task
-          if(atomicAdd(&d_partition_counter_gpu[cur_partition], 1) < partition_size) { // there could be multiple threads with same cur_partition access this 
-                                                                                       // notice partition_counter will be 5 when it is full(cuz we still add 1 in if condition) 
-            d_partition_result_gpu[neighbor_id] = cur_partition; // no need to atomic here cuz only one thread will access this neighbor here
-          }
-          else {
-            int new_partition_id = atomicAdd(max_partition_id, 1) + 1; // now we have new partition when we find cur_partition is full
-                                                                       // we need to store this new partition id locally to the thread
-            // printf("max_partition_id = %d\n", *max_partition_id);
-            // printf("new_partition_id = %d\n", new_partition_id);
-            d_partition_result_gpu[neighbor_id] = new_partition_id;
-            d_partition_counter_gpu[new_partition_id]++;  
-            // atomicAdd(&d_partition_counter_gpu[new_partition_id], 1);
-          }
+        else {
+          // before re-start a new partition, check neighbors of its parent cur_id to see if there is any neighbor i that has the d_parent[i] = cur_id
+
+          int new_partition_id = atomicAdd(max_partition_id, 1) + 1; // now we have new partition when we find cur_partition is full
+                                                                     // we need to store this new partition id locally to the thread
+          d_partition_result_gpu[neighbor_id] = new_partition_id;
+          d_partition_counter_gpu[new_partition_id]++;  
         }
       }
     }
   }
 }
-*/
 
-// testing kernel 2 
-__global__ void testing_kernel_2(
-  int* d_adjp, int* d_adjncy, int* d_adjncy_size, int* d_dep_size, int* d_suc_size,
+/*
+__global__ void partition_gpu_atomic_centric_vector(
+  int* d_adjp, int* d_adjncy, int* d_adjncy_size, int* d_dep_size,
   int* d_topo_result_gpu,
   int* d_partition_result_gpu,
   int* d_partition_counter_gpu,
@@ -128,8 +181,6 @@ __global__ void testing_kernel_2(
   int* max_partition_id,
   int read_offset, uint32_t read_size, // [read_offset, read_offset + read_size - 1] are all the frontiers 
   uint32_t* write_size,
-  int* d_atomic_partition_counter_node, // an atomic counter for each node in DAG
-  int* d_distance,
   int* d_parent
 ) {
 
@@ -143,72 +194,28 @@ __global__ void testing_kernel_2(
         continue;
       }
       // for each neighbor, assign d_distance for it
-      if(atomicMin(&d_distance[neighbor_id], d_distance[cur_id]+1) >= d_distance[cur_id]+1) { // if neighbor_id is updated, store this into parents  
-        atomicMin(&d_parent[neighbor_id], cur_id);
-        // d_parent[neighbor_id] = cur_id;
-      }
+      // if(atomicMin(&d_distance[neighbor_id], d_distance[cur_id]+1) >= d_distance[cur_id]+1) { // if neighbor_id is updated, store this into parents  
+        // atomicMin(&d_parent[neighbor_id], cur_id);
+      // }
       if(atomicSub(&d_dep_size[neighbor_id], 1) == 1) {
+        atomicMin(&d_parent[neighbor_id], d_partition_result_gpu[cur_id]);
         int position = atomicAdd(write_size, 1); // no need to atomic here...
         d_topo_result_gpu[read_offset + read_size + position] = neighbor_id;        
         // also check if this partition id is full, if not, set this neighbor with the same id as its parent, if so, start a new partition id for this neighbor
         // int cur_partition = d_partition_result_gpu[cur_id]; // get partition id of current task
-        int cur_partition = d_partition_result_gpu[d_parent[neighbor_id]]; // get the partition id of the parent that gives this neighbor the shortest path
-        if(atomicAdd(&d_partition_counter_gpu[cur_partition], 1) < partition_size) { // there could be multiple threads with same cur_partition access this 
-                                                                                     // notice partition_counter will be 5 when it is full(cuz we still add 1 in if condition) 
-          d_partition_result_gpu[neighbor_id] = cur_partition; // no need to atomic here cuz only one thread will access this neighbor here
-          atomicAdd(&d_atomic_partition_counter_node[neighbor_id], 1);
-        }
-        else {
-          int new_partition_id = atomicAdd(max_partition_id, 1) + 1; // now we have new partition when we find cur_partition is full
-                                                                     // we need to store this new partition id locally to the thread
-          d_partition_result_gpu[neighbor_id] = new_partition_id;
-          atomicAdd(&d_atomic_partition_counter_node[neighbor_id], 1);
-          d_partition_counter_gpu[new_partition_id]++;  
-        }
-      }
-    }
-  }
-}
-
-/*
-// all the read and write will be perform straightly on d_topo_result_gpu
-__global__ void partition_gpu_atomic_centric_vector(
-  int* d_adjp, int* d_adjncy, int* d_adjncy_size, int* d_dep_size,
-  int* d_topo_result_gpu,
-  int* d_partition_result_gpu,
-  int* d_partition_counter_gpu,
-  int partition_size,
-  int* max_partition_id,
-  int read_offset, uint32_t read_size, // [read_offset, read_offset + read_size - 1] are all the frontiers 
-  uint32_t* write_size
-) {
-
-  uint32_t tid = blockDim.x * blockIdx.x + threadIdx.x;
-
-  if(tid < read_size) {
-    int cur_id = d_topo_result_gpu[read_offset + tid]; // get current task id
-    for(int offset=d_adjp[cur_id]; offset<d_adjp[cur_id] + d_adjncy_size[cur_id]; offset++) {
-      int neighbor_id = d_adjncy[offset];
-      if(neighbor_id == -1) { // if _adjncy[offset] = -1, it means it has no fanout
-        continue;
-      }
-      if(atomicSub(&d_dep_size[neighbor_id], 1) == 1) {
-        int position = atomicAdd(write_size, 1); // no need to atomic here...
-        d_topo_result_gpu[read_offset + read_size + position] = neighbor_id;        
-        // also check if this partition id is full, if not, set this neighbor with the same id as its parent, if so, start a new partition id for this neighbor
-        int cur_partition = d_partition_result_gpu[cur_id]; // get partition id of current task
+        // int cur_partition = d_partition_result_gpu[d_parent[neighbor_id]]; // get the partition id of the parent that gives this neighbor the shortest path
+        int cur_partition = d_parent[neighbor_id]; // get the partition id of the parent that gives this neighbor the shortest path
         if(atomicAdd(&d_partition_counter_gpu[cur_partition], 1) < partition_size) { // there could be multiple threads with same cur_partition access this 
                                                                                      // notice partition_counter will be 5 when it is full(cuz we still add 1 in if condition) 
           d_partition_result_gpu[neighbor_id] = cur_partition; // no need to atomic here cuz only one thread will access this neighbor here
         }
         else {
+          // before re-start a new partition, check neighbors of its parent cur_id to see if there is any neighbor i that has the d_parent[i] = cur_id
+
           int new_partition_id = atomicAdd(max_partition_id, 1) + 1; // now we have new partition when we find cur_partition is full
                                                                      // we need to store this new partition id locally to the thread
-          // printf("max_partition_id = %d\n", *max_partition_id);
-          // printf("new_partition_id = %d\n", new_partition_id);
           d_partition_result_gpu[neighbor_id] = new_partition_id;
           d_partition_counter_gpu[new_partition_id]++;  
-          // atomicAdd(&d_partition_counter_gpu[new_partition_id], 1);
         }
       }
     }
@@ -253,12 +260,20 @@ void Timer::call_cuda_partition() {
   int* d_distance; // d_distance[i] stores the shortest distance to node i from source in DAG
   checkError_t(cudaMalloc(&d_distance, sizeof(int)*num_nodes), "d_distance allocation failed");
   checkError_t(cudaMemcpy(d_distance, distance.data(), sizeof(int)*num_nodes, cudaMemcpyHostToDevice), "d_distance memcpy failed"); 
-  std::vector<int> parent(num_nodes, -1);
+  std::vector<int> parent(num_nodes, INT_MAX);
   int* d_parent; // parent[i] means the parent of node i, when performing partitition, 
                  // node i should be in the same partition as this parent(or start a new one if partition is full) 
   checkError_t(cudaMalloc(&d_parent, sizeof(int)*num_nodes), "d_parent allocation failed");
   checkError_t(cudaMemcpy(d_parent, parent.data(), sizeof(int)*num_nodes, cudaMemcpyHostToDevice), "d_parent memcpy failed"); 
-  
+ 
+  std::vector<int> level(num_nodes, -1);
+  for(unsigned i=0; i<source.size(); i++) {
+    level[source[i]] = 0;
+  }
+  int* d_level;
+  checkError_t(cudaMalloc(&d_level, sizeof(int)*num_nodes), "d_level allocation failed");
+  checkError_t(cudaMemcpy(d_level, level.data(), sizeof(int)*num_nodes, cudaMemcpyHostToDevice), "d_level memcpy failed"); 
+
   // reshape _topo_result_gpu
   _topo_result_gpu.resize(num_nodes);
 
@@ -284,9 +299,6 @@ void Timer::call_cuda_partition() {
   for(auto id : source) {
     atomic_partition_counter_node[id] = 1;
   }
-  int* d_atomic_partition_counter_node;
-  checkError_t(cudaMalloc(&d_atomic_partition_counter_node, sizeof(int)*num_nodes), "d_atomic_partition_counter_node allocation failed");
-  checkError_t(cudaMemcpy(d_atomic_partition_counter_node, atomic_partition_counter_node.data(), sizeof(int)*num_nodes, cudaMemcpyHostToDevice), "d_atomic_partition_counter_node memcpy failed"); 
 
   checkError_t(cudaMalloc(&d_adjp, sizeof(int)*num_nodes), "d_adjp allocation failed");
   checkError_t(cudaMalloc(&d_adjncy, sizeof(int)*num_edges), "d_adjncy allocation failed");
@@ -327,8 +339,8 @@ void Timer::call_cuda_partition() {
       std::exit(EXIT_FAILURE);
     }
 
-    testing_kernel_2<<<num_block, BLOCK_SIZE>>>(
-      d_adjp, d_adjncy, d_adjncy_size, d_dep_size, d_suc_size,
+    testing_kernel<<<num_block, BLOCK_SIZE>>>(
+      d_adjp, d_adjncy, d_adjncy_size, d_dep_size,
       d_topo_result_gpu,
       d_partition_result_gpu,
       d_partition_counter_gpu,
@@ -336,43 +348,16 @@ void Timer::call_cuda_partition() {
       max_partition_id,
       read_offset, read_size, // [read_offset, read_offset + read_size - 1] are all the frontiers 
       write_size,
-      d_atomic_partition_counter_node, // an atomic counter for each node in DAG
       d_distance,
-      d_parent
+      d_parent,
+      d_level
     );
-
-    /*
-    testing_kernel<<<1, 1>>>(
-      d_adjp, d_adjncy, d_adjncy_size, d_dep_size,
-      d_topo_result_gpu,
-      d_partition_result_gpu,
-      d_partition_counter_gpu,
-      partition_size,
-      max_partition_id,
-      read_offset, read_size, // [read_offset, read_offset + read_size - 1] are all the frontiers 
-      write_size
-    );
-    */
-
-    /*
-    // use kernal as global synchronization for one level. results are stored in d_topo_result_gpu 
-    partition_gpu_atomic_centric_vector<<<num_block, BLOCK_SIZE>>>(
-      d_adjp, d_adjncy, d_adjncy_size, d_dep_size,
-      d_topo_result_gpu,
-      d_partition_result_gpu,
-      d_partition_counter_gpu,
-      partition_size,
-      max_partition_id,
-      read_offset, read_size, // [read_offset, read_offset + read_size - 1] are all the frontiers 
-      write_size
-    );
-    */
-
+   
     cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess) {
       printf("Error: %s\n", cudaGetErrorString(err));
     }
- 
+
     /*
     check_result_gpu<<<1, 1>>>(
       d_topo_result_gpu,
@@ -381,7 +366,8 @@ void Timer::call_cuda_partition() {
       max_partition_id,
       num_nodes, write_size,
       d_distance,
-      d_parent
+      d_parent,
+      d_level
     );
     */
 
@@ -398,7 +384,7 @@ void Timer::call_cuda_partition() {
   auto end = std::chrono::steady_clock::now();
   GPU_topo_runtime += std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
   checkError_t(cudaMemcpy(&max_partition_id_cpu, max_partition_id, sizeof(int), cudaMemcpyDeviceToHost), "max_partition_id_cpu memcpy failed"); 
-  _total_num_partitions = max_partition_id_cpu + 1;
+  _total_num_partitions_gpu = max_partition_id_cpu + 1;
 
   // print gpu topo result
   // std::cout << "_topo_result_gpu = [";
@@ -406,12 +392,7 @@ void Timer::call_cuda_partition() {
   //   std::cout << id << " ";
   // }
   // std::cout << "]\n"; 
-  // std::cout << "_partition_result_gpu = [";
-  // for(auto partition : _partition_result_gpu) {
-  //   std::cout << partition << " ";
-  // }
-  // std::cout << "]\n"; 
-  std::cout << "_total_num_partitions = " << _total_num_partitions << "\n";
+  std::cout << "_total_num_partitions_gpu = " << _total_num_partitions_gpu << "\n";
 
   // // check partition result
   // for(auto partition : _partition_result_gpu) {
@@ -421,15 +402,6 @@ void Timer::call_cuda_partition() {
   //   }
   // }
  
-  // check atomic partition counter for each node
-  checkError_t(cudaMemcpy(atomic_partition_counter_node.data(), d_atomic_partition_counter_node, sizeof(int)*num_nodes, cudaMemcpyDeviceToHost), "atomic_partition_counter_node memcpy failed"); 
-  for(auto count : atomic_partition_counter_node) {
-    if(count != 1) {
-      std::cerr << "atomic counter wrong.\n";
-      std::exit(EXIT_FAILURE);
-    }
-  }
-
   checkError_t(cudaFree(d_adjp), "d_adjp free failed");
   checkError_t(cudaFree(d_adjncy), "d_adjncy free failed");
   checkError_t(cudaFree(d_adjncy_size), "d_adjncy_size free failed");
@@ -440,9 +412,9 @@ void Timer::call_cuda_partition() {
   checkError_t(cudaFree(d_partition_counter_gpu), "d_partition_counter_gpu free failed");
   checkError_t(cudaFree(write_size), "write_size free failed");
   checkError_t(cudaFree(max_partition_id), "max_partition_id free failed");
-  checkError_t(cudaFree(d_atomic_partition_counter_node), "d_atomic_partition_counter_node free failed");
   checkError_t(cudaFree(d_distance), "d_distance free failed");
   checkError_t(cudaFree(d_parent), "parent free failed");
+  checkError_t(cudaFree(d_level), "parent free failed");
   
   /*
    * partition cpu version
@@ -452,9 +424,28 @@ void Timer::call_cuda_partition() {
   _partition_result_cpu.resize(num_nodes, -1);
   int source_partition_id_cpu = 0;
   for(unsigned i=0; i<source.size(); i++) {
-    _partition_result_gpu[source[i]] = source_partition_id_cpu;
+    _partition_result_cpu[source[i]] = source_partition_id_cpu;
     source_partition_id_cpu++;
   }
+  _partition_counter_cpu.resize(num_nodes, 0);
+  for(unsigned i=0; i<source.size(); i++) { // at the beginning, each source corresponds to one partition
+    _partition_counter_cpu[i]++;
+  }
+  max_partition_id_cpu = source.size() - 1;
+  partition_cpu(dep_size, _partition_result_cpu, _partition_counter_cpu, &max_partition_id_cpu);
+  _total_num_partitions_cpu = max_partition_id_cpu + 1;
+ 
+  
+  std::cout << "_partition_result_cpu = [";
+  for(auto partition : _partition_result_cpu) {
+    std::cout << partition << " ";
+  }
+  std::cout << "]\n"; 
+  std::cout << "_partition_result_gpu = [";
+  for(auto partition : _partition_result_gpu) {
+    std::cout << partition << " ";
+  }
+  std::cout << "]\n"; 
 }
 
 };  // end of namespace ot. -----------------------------------------------------------------------

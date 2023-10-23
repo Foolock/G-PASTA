@@ -3,4 +3,4 @@
 3. fixed BUGs on number of threads not enough for one level of BFS -> BUT still, haven't actually fixed it! Need to call kernel for one level multiple times if threads are not enough
 The reason I am not doing this now is that current ctest cases won't have this problems.
 4. implementing partition parallel
-5. eliminated cycles after partition by applying shortest path and smallest id. Still need to implement smallest fanout
+5. implementing latest cycle elimination idea, 1st. adjacent level, 2nd. shortest path, 3rd. smallest partition id.
