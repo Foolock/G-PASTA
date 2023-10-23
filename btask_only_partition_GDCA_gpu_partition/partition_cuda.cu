@@ -128,8 +128,9 @@ __global__ void testing_kernel(
   int read_offset, uint32_t read_size, // [read_offset, read_offset + read_size - 1] are all the frontiers 
   uint32_t* write_size,
   int* d_distance,
-  int* d_parent,
-  int* d_level
+  int* d_level,
+  int* d_parent, // winner in candidate parents for this node
+  int* d_fu_partition // the future partition this node will be assigned to(if partition not full)
 ) {
 
   uint32_t tid = blockDim.x * blockIdx.x + threadIdx.x;
@@ -141,26 +142,31 @@ __global__ void testing_kernel(
       if(neighbor_id == -1) { // if _adjncy[offset] = -1, it means it has no fanout
         continue;
       }
-      // for each neighbor, assign d_level for it
-      // atomicMax(&d_level[neighbor_id], d_level[cur_id] + 1);
-      // atomicMin(&d_distance[neighbor_id], d_distance[cur_id]+1);
-      // for each neighbor, assign d_distance for it
-      if(atomicMin(&d_distance[neighbor_id], d_distance[cur_id]+1) >= d_distance[cur_id]+1) { // if neighbor_id is updated, store this into parents  
-        atomicMin(&d_parent[neighbor_id], cur_id);
+      
+      /*
+       * rule for merge a node:  
+       * 1. only check adjacent level parents
+       * 2. compare distance for its parents, choose the parents with shortest distance
+       * 3. when same distance, choose the parent with largest partition
+       */
+
+      if(atomicMax(&d_level[neighbor_id], d_level[cur_id]+1) < d_level[cur_id]+1) { // only happen for one thread during a kernel
+        d_distance[neighbor_id] = INT_MAX; // reset distance
+        d_fu_partition[neighbor_id] = -1; // reset future partition
       }
+
+      if(atomicMin(&d_distance[neighbor_id], d_distance[cur_id]+1) >= d_distance[cur_id]+1) { // happen for multiple threads
+        atomicMax(&d_fu_partition[neighbor_id], d_partition_result_gpu[cur_id]);
+      }
+
       if(atomicSub(&d_dep_size[neighbor_id], 1) == 1) {
         int position = atomicAdd(write_size, 1); // no need to atomic here...
         d_topo_result_gpu[read_offset + read_size + position] = neighbor_id;        
-        // also check if this partition id is full, if not, set this neighbor with the same id as its parent, if so, start a new partition id for this neighbor
-        // int cur_partition = d_partition_result_gpu[d_parent[neighbor_id]]; // get the partition id of the parent that gives this neighbor the shortest path
-        int cur_partition = d_partition_result_gpu[cur_id]; // get the partition id of the parent that gives this neighbor the shortest path
-        if(atomicAdd(&d_partition_counter_gpu[cur_partition], 1) < partition_size && cur_id == d_parent[neighbor_id]) { 
-          // printf("d_level[d_parent[neighbor_id]] = %d, d_level[neighbor_id] = %d\n", d_level[d_parent[neighbor_id]], d_level[neighbor_id]);
+        int cur_partition = d_fu_partition[neighbor_id]; // get the partition id of the parent that gives this neighbor the shortest path
+        if(atomicAdd(&d_partition_counter_gpu[cur_partition], 1) < partition_size) { 
           d_partition_result_gpu[neighbor_id] = cur_partition; // no need to atomic here cuz only one thread will access this neighbor here
         }
         else {
-          // before re-start a new partition, check neighbors of its parent cur_id to see if there is any neighbor i that has the d_parent[i] = cur_id
-
           int new_partition_id = atomicAdd(max_partition_id, 1) + 1; // now we have new partition when we find cur_partition is full
                                                                      // we need to store this new partition id locally to the thread
           d_partition_result_gpu[neighbor_id] = new_partition_id;
@@ -274,6 +280,11 @@ void Timer::call_cuda_partition() {
   checkError_t(cudaMalloc(&d_level, sizeof(int)*num_nodes), "d_level allocation failed");
   checkError_t(cudaMemcpy(d_level, level.data(), sizeof(int)*num_nodes, cudaMemcpyHostToDevice), "d_level memcpy failed"); 
 
+  std::vector<int> fu_partition(num_nodes, -1);
+  int* d_fu_partition;
+  checkError_t(cudaMalloc(&d_fu_partition, sizeof(int)*num_nodes), "d_fu_partition allocation failed");
+  checkError_t(cudaMemcpy(d_fu_partition, fu_partition.data(), sizeof(int)*num_nodes, cudaMemcpyHostToDevice), "d_fu_partition memcpy failed"); 
+
   // reshape _topo_result_gpu
   _topo_result_gpu.resize(num_nodes);
 
@@ -349,8 +360,9 @@ void Timer::call_cuda_partition() {
       read_offset, read_size, // [read_offset, read_offset + read_size - 1] are all the frontiers 
       write_size,
       d_distance,
+      d_level,
       d_parent,
-      d_level
+      d_fu_partition
     );
    
     cudaError_t err = cudaGetLastError();
@@ -414,7 +426,8 @@ void Timer::call_cuda_partition() {
   checkError_t(cudaFree(max_partition_id), "max_partition_id free failed");
   checkError_t(cudaFree(d_distance), "d_distance free failed");
   checkError_t(cudaFree(d_parent), "parent free failed");
-  checkError_t(cudaFree(d_level), "parent free failed");
+  checkError_t(cudaFree(d_level), "level free failed");
+  checkError_t(cudaFree(d_fu_partition), "fu_partition free failed");
   
   /*
    * partition cpu version
