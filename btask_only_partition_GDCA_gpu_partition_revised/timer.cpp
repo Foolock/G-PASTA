@@ -1020,9 +1020,12 @@ void Timer::_update_timing() {
   // Execute the ftask
   _executor.run(_taskflow).wait();
 
+  // run btask sequentially
+  // _run_vivekDAG_GDCA_seq();
+
   // initialize vivekDAG only for btask
   _initialize_vivekDAG();
-
+ 
   // partition vivekDAG 
   _partition_vivekDAG_GDCA_gpu();
 
@@ -3003,22 +3006,30 @@ bool Timer::_isCyclicUtil(VivekTask* vtask) {
 void Timer::_run_vivekDAG_GDCA_seq() {
 
   // run vivekDAG sequentially
-  for(auto cluster : _vivekDAG._vtask_clusters) {
-    for(auto vtask : cluster) {
-      for(auto pair : vtask->_pins) {
-        if(pair.first) {
-          _fprop_rc_timing(*(pair.second));
-          _fprop_slew(*(pair.second));
-          _fprop_delay(*(pair.second));
-          _fprop_at(*(pair.second));
-          _fprop_test(*(pair.second));
-        }
-        else {
-          _bprop_rat(*(pair.second));
-        }
+  _vivekDAG.resetVivekDAG();
+  
+  // add tasks to vivekDAG
+  for(auto pin : _bprop_cands) {
+    _vivekDAG.addVivekTask(0, 0, std::make_pair(false, pin));  
+  }
+
+  auto start = std::chrono::steady_clock::now();
+  for(auto vtask : _vivekDAG._vtask_ptrs) {
+    for(auto pair : vtask->_pins) {
+      if(pair.first) {
+        _fprop_rc_timing(*(pair.second));
+        _fprop_slew(*(pair.second));
+        _fprop_delay(*(pair.second));
+        _fprop_at(*(pair.second));
+        _fprop_test(*(pair.second));
+      }
+      else {
+        _bprop_rat(*(pair.second));
       }
     }
   }
+  auto end = std::chrono::steady_clock::now();
+  _vivek_btask_runtime += std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
 
 }
 

@@ -23,6 +23,55 @@ void checkError_t(cudaError_t error, std::string msg) {
     }
 }
 
+
+void Timer::partition_cpu_revised(
+  std::vector<int>& dep_size, 
+  std::vector<int>& partition_result_cpu, 
+  std::vector<int>& partition_counter_cpu, 
+  std::vector<int>& fu_partition, // the desired partition id for this node, initialized as -1 for each node
+  int* max_partition_id
+) {
+
+  // find roots
+  std::queue<int> to_visit;
+  for(unsigned id=0; id<_adjp.size(); id++) {
+    if(_vivekDAG._vtask_ptrs[id]->_fanin.size() == 0) {
+      _topo_result_cpu.push_back(id);
+      to_visit.push(id);
+    }
+  }
+  
+  while(!to_visit.empty()) {
+    int cur_id = to_visit.front();
+    to_visit.pop();
+    for(int offset=_adjp[cur_id]; offset<_adjp[cur_id] + _adjncy_size[cur_id]; offset++) {
+      int neighbor_id = _adjncy[offset];
+      if(neighbor_id == -1) { // if _adjncy[offset] = -1, it means it has no fanout
+        continue;
+      }
+      if(fu_partition[neighbor_id] < partition_result_cpu[cur_id]) {
+        fu_partition[neighbor_id] = partition_result_cpu[cur_id];
+      }
+      dep_size[neighbor_id] --;
+      if(dep_size[neighbor_id] == 0) {
+        _topo_result_cpu.push_back(neighbor_id);
+        to_visit.push(neighbor_id);
+        int cur_partition = fu_partition[neighbor_id];
+        if(partition_counter_cpu[cur_partition] < partition_size) {
+          partition_result_cpu[neighbor_id] = cur_partition;
+          partition_counter_cpu[cur_partition]++;
+        }
+        else {
+          (*max_partition_id)++;
+          int new_partition_id = *max_partition_id; 
+          partition_result_cpu[neighbor_id] = new_partition_id;
+          partition_counter_cpu[new_partition_id]++;
+        }
+      }
+    }
+  }
+}
+
 void Timer::partition_cpu(std::vector<int>& dep_size, std::vector<int>& partition_result_cpu, std::vector<int>& partition_counter_cpu, int* max_partition_id) {
 
   // find roots
@@ -60,18 +109,6 @@ void Timer::partition_cpu(std::vector<int>& dep_size, std::vector<int>& partitio
       }
     }
   }
-
-  // std::cout << "_topo_result_cpu = [";
-  // for(auto task : _topo_result_cpu) {
-  //   std::cout << task << " ";
-  // }
-  // std::cout << "]\n";
-  // std::cout << "corresponding partition result = [";
-  // for(auto task : _topo_result_cpu) {
-  //   std::cout << partition_result_cpu[task] << " ";
-  // }
-  // std::cout << "]\n";
-
 }
 
 __global__ void check_result_gpu(
@@ -420,7 +457,8 @@ void Timer::call_cuda_partition() {
     _partition_counter_cpu[i]++;
   }
   max_partition_id_cpu = source.size() - 1;
-  partition_cpu(dep_size, _partition_result_cpu, _partition_counter_cpu, &max_partition_id_cpu);
+  std::vector<int> fu_partition_cpu(num_nodes, -1);
+  partition_cpu_revised(dep_size, _partition_result_cpu, _partition_counter_cpu, fu_partition_cpu, &max_partition_id_cpu);
   _total_num_partitions_cpu = max_partition_id_cpu + 1;
  
   
