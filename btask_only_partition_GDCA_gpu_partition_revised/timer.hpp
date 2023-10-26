@@ -150,7 +150,7 @@ class Timer {
     void call_cuda_partition();
     void bfs_cpu(std::vector<int>& distance, std::vector<int>& parent);
     void topo_cpu(std::vector<int>& dep_size);
-    int partition_size = 11;
+    int partition_size = 1;
     void partition_cpu(std::vector<int>& dep_size, std::vector<int>& partition_result_cpu, std::vector<int>& partition_counter_cpu, int* max_partition_id); 
 
   private:
@@ -403,7 +403,7 @@ class Timer {
 
     // partition vivekDAG
     void _partition_vivekDAG();
-    void _partition_vivekDAG_GDCA(); // older version of GDCA implementation
+    void _partition_vivekDAG_GDCA_origin(); // older version of GDCA implementation
     void _partition_vivekDAG_GDCA_cpu();
     void _partition_vivekDAG_GDCA_gpu();
     void _partition_vivekDAG_GDCA_topo();

@@ -432,9 +432,9 @@ _partition_result_cpu	timer.hpp	/^    std::vector<int> _partition_result_cpu;$/;
 _partition_result_gpu	timer.hpp	/^    std::vector<int> _partition_result_gpu;$/;"	m	class:ot::Timer	typeref:typename:std::vector<int>
 _partition_timing_profile	timer.cpp	/^void Timer::_partition_timing_profile() {$/;"	f	class:ot::Timer	typeref:typename:void
 _partition_vivekDAG	timer.cpp	/^void Timer::_partition_vivekDAG() {$/;"	f	class:ot::Timer	typeref:typename:void
-_partition_vivekDAG_GDCA	timer.cpp	/^void Timer::_partition_vivekDAG_GDCA() {$/;"	f	class:ot::Timer	typeref:typename:void
 _partition_vivekDAG_GDCA_cpu	timer.cpp	/^void Timer::_partition_vivekDAG_GDCA_cpu() {$/;"	f	class:ot::Timer	typeref:typename:void
 _partition_vivekDAG_GDCA_gpu	timer.cpp	/^void Timer::_partition_vivekDAG_GDCA_gpu() {$/;"	f	class:ot::Timer	typeref:typename:void
+_partition_vivekDAG_GDCA_origin	timer.cpp	/^void Timer::_partition_vivekDAG_GDCA_origin() {$/;"	f	class:ot::Timer	typeref:typename:void
 _partition_vivekDAG_GDCA_topo	timer.cpp	/^void Timer::_partition_vivekDAG_GDCA_topo() {$/;"	f	class:ot::Timer	typeref:typename:void
 _paths	path.hpp	/^    std::vector<std::unique_ptr<Path>> _paths;$/;"	m	class:ot::PathHeap	typeref:typename:std::vector<std::unique_ptr<Path>>
 _paths	pfxt.hpp	/^    std::vector<std::unique_ptr<PfxtNode>> _paths;$/;"	m	class:ot::PfxtCache	typeref:typename:std::vector<std::unique_ptr<PfxtNode>>

@@ -144,21 +144,6 @@ __global__ void testing_kernel(
         continue;
       }
       
-      /*
-       * rule for merge a node:  
-       * 1. only check adjacent level parents
-       * 2. compare distance for its parents, choose the parents with shortest distance
-       * 3. when same distance, choose the parent with largest partition
-       */
-
-      // if(atomicMax(&d_level[neighbor_id], d_level[cur_id]+1) < d_level[cur_id]+1) { // only happen for one thread during a kernel
-      //   d_distance[neighbor_id] = INT_MAX; // reset distance
-      //   d_fu_partition[neighbor_id] = -1; // reset future partition
-      // }
-
-      // if(atomicMin(&d_distance[neighbor_id], d_distance[cur_id]+1) >= d_distance[cur_id]+1) { // happen for multiple threads
-      //   atomicMax(&d_fu_partition[neighbor_id], d_partition_result_gpu[cur_id]);
-      // }
       atomicMax(&d_fu_partition[neighbor_id], d_partition_result_gpu[cur_id]);
 
       if(atomicSub(&d_dep_size[neighbor_id], 1) == 1) {

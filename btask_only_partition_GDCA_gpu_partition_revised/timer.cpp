@@ -1023,15 +1023,8 @@ void Timer::_update_timing() {
   // initialize vivekDAG only for btask
   _initialize_vivekDAG();
 
-  // partition vivekDAG on CPU/GPU
-  // _partition_vivekDAG_GDCA_topo();
-  // export a csr format of vivekDAG 
-  _export_csr();
-  // call cuda kernel
-  call_cuda_partition();
-
-  // partition vivekDAG following exactly GDCA partition
-  _partition_vivekDAG_GDCA();
+  // partition vivekDAG 
+  _partition_vivekDAG_GDCA_gpu();
 
   // rebuild _taskflow by vivekDAG
   auto start = std::chrono::steady_clock::now();
@@ -1938,7 +1931,7 @@ void Timer::_GDCA_dfs() {
   } 
 
   // merging parameter
-  size_t dst_cluster_size = 1; // destination cluster size
+  size_t dst_cluster_size = partition_size; // destination cluster size
   size_t cur_cluster_id = 0; // current cluster id  
   // std::list<int> boundary; // vtasks(id) whose dependents are not fully released
   auto start = std::chrono::steady_clock::now();
@@ -1949,11 +1942,11 @@ void Timer::_GDCA_dfs() {
     _global_task_queue_GDCA.pop();
     
     // a vector to store the vtasks in the same cluster
-    std::vector<VivekTask*> cur_cluster;
+    // std::vector<VivekTask*> cur_cluster;
 
     // assign cluster id
     master->_cluster_id = cur_cluster_id;
-    cur_cluster.push_back(master); 
+    // cur_cluster.push_back(master); 
 
     // release dependents for successors of master
     for(auto successor_id : master->_fanout) {
@@ -1973,7 +1966,7 @@ void Timer::_GDCA_dfs() {
       VivekTask* next = _global_task_queue_GDCA.top();
       _global_task_queue_GDCA.pop();
       next->_cluster_id = cur_cluster_id; 
-      cur_cluster.push_back(next);
+      // cur_cluster.push_back(next);
       cluster_size++;
 
       for(auto successor_id : next->_fanout) {
@@ -1983,14 +1976,19 @@ void Timer::_GDCA_dfs() {
         }
       }
     }
-    _vivekDAG._vtask_clusters.push_back(cur_cluster);
+    // _vivekDAG._vtask_clusters.push_back(cur_cluster);
     cur_cluster_id++;
   } 
   auto end = std::chrono::steady_clock::now();
   CPU_topo_runtime += std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
+  _vivekDAG._vtask_clusters.resize(cur_cluster_id);
 }
 
 void Timer::_GDCA_build_coarsen_graph() {
+
+  for(auto task_ptr : _vivekDAG._vtask_ptrs) {
+    _vivekDAG._vtask_clusters[task_ptr->_cluster_id].push_back(task_ptr);
+  }
 
   // each cluster in _vtask_clusters stands for a new vtask
   for(size_t cluster_id=0; cluster_id<_vivekDAG._vtask_clusters.size(); cluster_id++) {
@@ -2068,7 +2066,7 @@ void Timer::_GDCA_build_coarsen_graph_par() {
 
 }
 
-void Timer::_partition_vivekDAG_GDCA() {
+void Timer::_partition_vivekDAG_GDCA_origin() {
 
   /*
    * improve vivek partition by removing checking cycle 
