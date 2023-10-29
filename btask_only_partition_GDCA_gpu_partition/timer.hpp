@@ -43,8 +43,10 @@ class Timer {
    
     ~Timer() {
 
-      std::cout << "CPU_topo_runtime: " << CPU_topo_runtime << "\n";
-      std::cout << "GPU_topo_runtime: " << GPU_topo_runtime << "\n";
+      std::cout << "CPU_topo(partition)_runtime: " << CPU_topo_runtime << "\n";
+      std::cout << "GPU_topo(partition)_runtime: " << GPU_topo_runtime << "\n";
+      std::cout << "_vivek_btask_rebuild_time: " << _vivek_btask_rebuild_time << "\n";
+      std::cout << "_vivek_btask_runtime: " << _vivek_btask_runtime << "\n";
 
     }
 
@@ -148,8 +150,9 @@ class Timer {
     void call_cuda_partition();
     void bfs_cpu(std::vector<int>& distance, std::vector<int>& parent);
     void topo_cpu(std::vector<int>& dep_size);
-    int partition_size = 4;
+    int partition_size = 1;
     void partition_cpu(std::vector<int>& dep_size, std::vector<int>& partition_result_cpu, std::vector<int>& partition_counter_cpu, int* max_partition_id); 
+    void partition_cpu_revised(std::vector<int>& dep_size, std::vector<int>& partition_result_cpu, std::vector<int>& partition_counter_cpu, std::vector<int>& fu_partition, int* max_partition_id); 
 
   private:
 
@@ -401,13 +404,15 @@ class Timer {
 
     // partition vivekDAG
     void _partition_vivekDAG();
-    void _partition_vivekDAG_GDCA(); // older version of GDCA implementation
+    void _partition_vivekDAG_GDCA_origin(); // older version of GDCA implementation
     void _partition_vivekDAG_GDCA_cpu();
     void _partition_vivekDAG_GDCA_gpu();
+    void _partition_vivekDAG_GDCA_topo();
     void _GDCA_dfs();
     void _GDCA_build_coarsen_graph();  
     void _GDCA_build_coarsen_graph_gpu();
     void _GDCA_build_coarsen_graph_cpu();
+    void _GDCA_build_coarsen_graph_topo();
     void _GDCA_build_coarsen_graph_par();
 
     // print runtime for each task

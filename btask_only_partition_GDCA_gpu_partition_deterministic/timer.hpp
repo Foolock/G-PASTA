@@ -148,9 +148,10 @@ class Timer {
     void call_cuda_topo_2queue();
     void call_cuda_topo_centric_vector();
     void call_cuda_partition();
+    void call_cuda_partition_deterministic();
     void bfs_cpu(std::vector<int>& distance, std::vector<int>& parent);
     void topo_cpu(std::vector<int>& dep_size);
-    int partition_size = 1;
+    int partition_size = 11;
     void partition_cpu(std::vector<int>& dep_size, std::vector<int>& partition_result_cpu, std::vector<int>& partition_counter_cpu, int* max_partition_id); 
     void partition_cpu_revised(std::vector<int>& dep_size, std::vector<int>& partition_result_cpu, std::vector<int>& partition_counter_cpu, std::vector<int>& fu_partition, int* max_partition_id); 
 

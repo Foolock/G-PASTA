@@ -23,6 +23,55 @@ void checkError_t(cudaError_t error, std::string msg) {
     }
 }
 
+
+void Timer::partition_cpu_revised(
+  std::vector<int>& dep_size, 
+  std::vector<int>& partition_result_cpu, 
+  std::vector<int>& partition_counter_cpu, 
+  std::vector<int>& fu_partition, // the desired partition id for this node, initialized as -1 for each node
+  int* max_partition_id
+) {
+
+  // find roots
+  std::queue<int> to_visit;
+  for(unsigned id=0; id<_adjp.size(); id++) {
+    if(_vivekDAG._vtask_ptrs[id]->_fanin.size() == 0) {
+      _topo_result_cpu.push_back(id);
+      to_visit.push(id);
+    }
+  }
+  
+  while(!to_visit.empty()) {
+    int cur_id = to_visit.front();
+    to_visit.pop();
+    for(int offset=_adjp[cur_id]; offset<_adjp[cur_id] + _adjncy_size[cur_id]; offset++) {
+      int neighbor_id = _adjncy[offset];
+      if(neighbor_id == -1) { // if _adjncy[offset] = -1, it means it has no fanout
+        continue;
+      }
+      if(fu_partition[neighbor_id] < partition_result_cpu[cur_id]) {
+        fu_partition[neighbor_id] = partition_result_cpu[cur_id];
+      }
+      dep_size[neighbor_id] --;
+      if(dep_size[neighbor_id] == 0) {
+        _topo_result_cpu.push_back(neighbor_id);
+        to_visit.push(neighbor_id);
+        int cur_partition = fu_partition[neighbor_id];
+        if(partition_counter_cpu[cur_partition] < partition_size) {
+          partition_result_cpu[neighbor_id] = cur_partition;
+          partition_counter_cpu[cur_partition]++;
+        }
+        else {
+          (*max_partition_id)++;
+          int new_partition_id = *max_partition_id; 
+          partition_result_cpu[neighbor_id] = new_partition_id;
+          partition_counter_cpu[new_partition_id]++;
+        }
+      }
+    }
+  }
+}
+
 void Timer::partition_cpu(std::vector<int>& dep_size, std::vector<int>& partition_result_cpu, std::vector<int>& partition_counter_cpu, int* max_partition_id) {
 
   // find roots
@@ -34,7 +83,6 @@ void Timer::partition_cpu(std::vector<int>& dep_size, std::vector<int>& partitio
     }
   }
   
-  auto start = std::chrono::steady_clock::now();
   while(!to_visit.empty()) {
     int cur_id = to_visit.front();
     to_visit.pop();
@@ -61,9 +109,6 @@ void Timer::partition_cpu(std::vector<int>& dep_size, std::vector<int>& partitio
       }
     }
   }
-  auto end = std::chrono::steady_clock::now();
-  CPU_topo_runtime += std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
-
 }
 
 __global__ void check_result_gpu(
@@ -73,7 +118,6 @@ __global__ void check_result_gpu(
   int* max_partition_id,
   int num_nodes, uint32_t* write_size,
   int* d_distance,
-  int* d_parent,
   int* d_level
 ) {
 
@@ -103,11 +147,6 @@ __global__ void check_result_gpu(
       printf("%d ", d_distance[i]);
     }
     printf("\n");
-    printf("after pushed, d_parent(threadId = %d) = ", tid);
-    for(int i=0; i<num_nodes; i++) {
-      printf("%d ", d_parent[i]);
-    }
-    printf("\n");
     printf("after pushed, d_level(threadId = %d) = ", tid);
     for(int i=0; i<num_nodes; i++) {
       printf("%d ", d_level[i]);
@@ -129,7 +168,6 @@ __global__ void testing_kernel(
   uint32_t* write_size,
   int* d_distance,
   int* d_level,
-  int* d_parent, // winner in candidate parents for this node
   int* d_fu_partition // the future partition this node will be assigned to(if partition not full)
 ) {
 
@@ -143,21 +181,7 @@ __global__ void testing_kernel(
         continue;
       }
       
-      /*
-       * rule for merge a node:  
-       * 1. only check adjacent level parents
-       * 2. compare distance for its parents, choose the parents with shortest distance
-       * 3. when same distance, choose the parent with largest partition
-       */
-
-      if(atomicMax(&d_level[neighbor_id], d_level[cur_id]+1) < d_level[cur_id]+1) { // only happen for one thread during a kernel
-        d_distance[neighbor_id] = INT_MAX; // reset distance
-        d_fu_partition[neighbor_id] = -1; // reset future partition
-      }
-
-      if(atomicMin(&d_distance[neighbor_id], d_distance[cur_id]+1) >= d_distance[cur_id]+1) { // happen for multiple threads
-        atomicMax(&d_fu_partition[neighbor_id], d_partition_result_gpu[cur_id]);
-      }
+      atomicMax(&d_fu_partition[neighbor_id], d_partition_result_gpu[cur_id]);
 
       if(atomicSub(&d_dep_size[neighbor_id], 1) == 1) {
         int position = atomicAdd(write_size, 1); // no need to atomic here...
@@ -243,13 +267,12 @@ void Timer::call_cuda_partition() {
       source.push_back(id);
     }
   }
-  std::cout << "num of source = " << source.size() << "\n";
+  // std::cout << "num of source = " << source.size() << "\n";
 
   int* d_adjp; 
   int* d_adjncy; 
   int* d_adjncy_size;
   int* d_dep_size;
-  int* d_suc_size;
   int* d_topo_result_gpu;
   int* d_partition_result_gpu;
   int* d_partition_counter_gpu;
@@ -264,26 +287,15 @@ void Timer::call_cuda_partition() {
     distance[source[i]] = 0;
   }
   int* d_distance; // d_distance[i] stores the shortest distance to node i from source in DAG
-  checkError_t(cudaMalloc(&d_distance, sizeof(int)*num_nodes), "d_distance allocation failed");
-  checkError_t(cudaMemcpy(d_distance, distance.data(), sizeof(int)*num_nodes, cudaMemcpyHostToDevice), "d_distance memcpy failed"); 
-  std::vector<int> parent(num_nodes, INT_MAX);
-  int* d_parent; // parent[i] means the parent of node i, when performing partitition, 
-                 // node i should be in the same partition as this parent(or start a new one if partition is full) 
-  checkError_t(cudaMalloc(&d_parent, sizeof(int)*num_nodes), "d_parent allocation failed");
-  checkError_t(cudaMemcpy(d_parent, parent.data(), sizeof(int)*num_nodes, cudaMemcpyHostToDevice), "d_parent memcpy failed"); 
  
   std::vector<int> level(num_nodes, -1);
   for(unsigned i=0; i<source.size(); i++) {
     level[source[i]] = 0;
   }
   int* d_level;
-  checkError_t(cudaMalloc(&d_level, sizeof(int)*num_nodes), "d_level allocation failed");
-  checkError_t(cudaMemcpy(d_level, level.data(), sizeof(int)*num_nodes, cudaMemcpyHostToDevice), "d_level memcpy failed"); 
 
   std::vector<int> fu_partition(num_nodes, -1);
   int* d_fu_partition;
-  checkError_t(cudaMalloc(&d_fu_partition, sizeof(int)*num_nodes), "d_fu_partition allocation failed");
-  checkError_t(cudaMemcpy(d_fu_partition, fu_partition.data(), sizeof(int)*num_nodes, cudaMemcpyHostToDevice), "d_fu_partition memcpy failed"); 
 
   // reshape _topo_result_gpu
   _topo_result_gpu.resize(num_nodes);
@@ -315,19 +327,20 @@ void Timer::call_cuda_partition() {
   checkError_t(cudaMalloc(&d_adjncy, sizeof(int)*num_edges), "d_adjncy allocation failed");
   checkError_t(cudaMalloc(&d_adjncy_size, sizeof(int)*num_nodes), "d_adjncy_size allocation failed");
   checkError_t(cudaMalloc(&d_dep_size, sizeof(int)*num_nodes), "d_dep_size allocation failed");
-  checkError_t(cudaMalloc(&d_suc_size, sizeof(int)*num_nodes), "d_suc_size allocation failed");
   checkError_t(cudaMalloc(&d_topo_result_gpu, sizeof(int)*num_nodes), "d_topo_result_gpu allocation failed");
   checkError_t(cudaMalloc(&d_partition_result_gpu, sizeof(int)*num_nodes), "d_partition_result_gpu allocation failed");
   checkError_t(cudaMalloc(&d_partition_counter_gpu, sizeof(int)*num_nodes), "d_partition_counter_gpu allocation failed");
   checkError_t(cudaMalloc(&write_size, sizeof(uint32_t)), "write_size allocation failed");
   checkError_t(cudaMalloc(&max_partition_id, sizeof(int)), "max_partition_id allocation failed");
+  checkError_t(cudaMalloc(&d_distance, sizeof(int)*num_nodes), "d_distance allocation failed");
+  checkError_t(cudaMalloc(&d_level, sizeof(int)*num_nodes), "d_level allocation failed");
+  checkError_t(cudaMalloc(&d_fu_partition, sizeof(int)*num_nodes), "d_fu_partition allocation failed");
 
   auto start = std::chrono::steady_clock::now();
   checkError_t(cudaMemcpy(d_adjp, _adjp.data(), sizeof(int)*num_nodes, cudaMemcpyHostToDevice), "d_adjp memcpy failed"); 
   checkError_t(cudaMemcpy(d_adjncy, _adjncy.data(), sizeof(int)*num_edges, cudaMemcpyHostToDevice), "d_adjncy memcpy failed"); 
   checkError_t(cudaMemcpy(d_adjncy_size, _adjncy_size.data(), sizeof(int)*num_nodes, cudaMemcpyHostToDevice), "d_adjncy_size memcpy failed"); 
   checkError_t(cudaMemcpy(d_dep_size, _dep_size.data(), sizeof(int)*num_nodes, cudaMemcpyHostToDevice), "d_dep_size memcpy failed"); 
-  checkError_t(cudaMemcpy(d_suc_size, _suc_size.data(), sizeof(int)*num_nodes, cudaMemcpyHostToDevice), "d_suc_size memcpy failed"); 
   checkError_t(cudaMemcpy(d_topo_result_gpu, source.data(), sizeof(int)*source.size(), cudaMemcpyHostToDevice), "d_topo_result_gpu memcpy failed"); 
   checkError_t(cudaMemcpy(d_partition_result_gpu, _partition_result_gpu.data(), sizeof(int)*num_nodes, cudaMemcpyHostToDevice), "d_partition_result_gpu memcpy failed"); 
   checkError_t(cudaMemcpy(d_partition_counter_gpu, _partition_counter_gpu.data(), sizeof(int)*num_nodes, cudaMemcpyHostToDevice), "d_partition_counter_gpu memcpy failed"); 
@@ -335,6 +348,9 @@ void Timer::call_cuda_partition() {
   int max_partition_id_cpu = source.size() - 1;
   // checkError_t(cudaMemset(max_partition_id, 0x00000001, sizeof(int)), "max_partition_id memset failed");
   checkError_t(cudaMemcpy(max_partition_id, &max_partition_id_cpu, sizeof(int), cudaMemcpyHostToDevice), "max_partition_id memcpy failed"); 
+  checkError_t(cudaMemcpy(d_distance, distance.data(), sizeof(int)*num_nodes, cudaMemcpyHostToDevice), "d_distance memcpy failed"); 
+  checkError_t(cudaMemcpy(d_level, level.data(), sizeof(int)*num_nodes, cudaMemcpyHostToDevice), "d_level memcpy failed"); 
+  checkError_t(cudaMemcpy(d_fu_partition, fu_partition.data(), sizeof(int)*num_nodes, cudaMemcpyHostToDevice), "d_fu_partition memcpy failed"); 
 
 
   // invoke kernel
@@ -361,7 +377,6 @@ void Timer::call_cuda_partition() {
       write_size,
       d_distance,
       d_level,
-      d_parent,
       d_fu_partition
     );
    
@@ -378,7 +393,6 @@ void Timer::call_cuda_partition() {
       max_partition_id,
       num_nodes, write_size,
       d_distance,
-      d_parent,
       d_level
     );
     */
@@ -404,7 +418,7 @@ void Timer::call_cuda_partition() {
   //   std::cout << id << " ";
   // }
   // std::cout << "]\n"; 
-  std::cout << "_total_num_partitions_gpu = " << _total_num_partitions_gpu << "\n";
+  // std::cout << "_total_num_partitions_gpu = " << _total_num_partitions_gpu << "\n";
 
   // // check partition result
   // for(auto partition : _partition_result_gpu) {
@@ -418,14 +432,12 @@ void Timer::call_cuda_partition() {
   checkError_t(cudaFree(d_adjncy), "d_adjncy free failed");
   checkError_t(cudaFree(d_adjncy_size), "d_adjncy_size free failed");
   checkError_t(cudaFree(d_dep_size), "d_dep_size free failed");
-  checkError_t(cudaFree(d_suc_size), "d_suc_size free failed");
   checkError_t(cudaFree(d_topo_result_gpu), "d_topo_result_gpu free failed");
   checkError_t(cudaFree(d_partition_result_gpu), "d_partition_result_gpu free failed");
   checkError_t(cudaFree(d_partition_counter_gpu), "d_partition_counter_gpu free failed");
   checkError_t(cudaFree(write_size), "write_size free failed");
   checkError_t(cudaFree(max_partition_id), "max_partition_id free failed");
   checkError_t(cudaFree(d_distance), "d_distance free failed");
-  checkError_t(cudaFree(d_parent), "parent free failed");
   checkError_t(cudaFree(d_level), "level free failed");
   checkError_t(cudaFree(d_fu_partition), "fu_partition free failed");
   
@@ -445,20 +457,21 @@ void Timer::call_cuda_partition() {
     _partition_counter_cpu[i]++;
   }
   max_partition_id_cpu = source.size() - 1;
-  partition_cpu(dep_size, _partition_result_cpu, _partition_counter_cpu, &max_partition_id_cpu);
+  std::vector<int> fu_partition_cpu(num_nodes, -1);
+  partition_cpu_revised(dep_size, _partition_result_cpu, _partition_counter_cpu, fu_partition_cpu, &max_partition_id_cpu);
   _total_num_partitions_cpu = max_partition_id_cpu + 1;
  
   
-  std::cout << "_partition_result_cpu = [";
-  for(auto partition : _partition_result_cpu) {
-    std::cout << partition << " ";
-  }
-  std::cout << "]\n"; 
-  std::cout << "_partition_result_gpu = [";
-  for(auto partition : _partition_result_gpu) {
-    std::cout << partition << " ";
-  }
-  std::cout << "]\n"; 
+  // std::cout << "_partition_result_cpu = [";
+  // for(auto partition : _partition_result_cpu) {
+  //   std::cout << partition << " ";
+  // }
+  // std::cout << "]\n"; 
+  // std::cout << "_partition_result_gpu = [";
+  // for(auto partition : _partition_result_gpu) {
+  //   std::cout << partition << " ";
+  // }
+  // std::cout << "]\n"; 
 }
 
 };  // end of namespace ot. -----------------------------------------------------------------------

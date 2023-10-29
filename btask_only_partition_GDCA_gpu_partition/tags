@@ -106,6 +106,7 @@ _GDCA_build_coarsen_graph	timer.cpp	/^void Timer::_GDCA_build_coarsen_graph() {$
 _GDCA_build_coarsen_graph_cpu	timer.cpp	/^void Timer::_GDCA_build_coarsen_graph_cpu() {$/;"	f	class:ot::Timer	typeref:typename:void
 _GDCA_build_coarsen_graph_gpu	timer.cpp	/^void Timer::_GDCA_build_coarsen_graph_gpu() {$/;"	f	class:ot::Timer	typeref:typename:void
 _GDCA_build_coarsen_graph_par	timer.cpp	/^void Timer::_GDCA_build_coarsen_graph_par() {$/;"	f	class:ot::Timer	typeref:typename:void
+_GDCA_build_coarsen_graph_topo	timer.cpp	/^void Timer::_GDCA_build_coarsen_graph_topo() {$/;"	f	class:ot::Timer	typeref:typename:void
 _GDCA_dfs	timer.cpp	/^void Timer::_GDCA_dfs() {$/;"	f	class:ot::Timer	typeref:typename:void
 _S	sfxt.hpp	/^    size_t _S;    \/\/ super source$/;"	m	class:ot::SfxtCache	typeref:typename:size_t
 _T	sfxt.hpp	/^    size_t _T;    \/\/ root$/;"	m	class:ot::SfxtCache	typeref:typename:size_t
@@ -163,10 +164,12 @@ __anon5bcecbf71602	timer.cpp	/^  auto task = _taskflow.emplace([this, name=std::
 __anon5bcecbf71702	timer.cpp	/^  std::sort(_global_task_vector.begin(), _global_task_vector.end(), [](const VivekTask* a, Vivek/;"	f	function:ot::Timer::_initialize_vivekDAG	file:
 __anon5bcecbf71802	timer.cpp	/^    std::sort(local_task_vector.begin(), local_task_vector.end(), [](const VivekTask* a, VivekTa/;"	f	function:ot::Timer::_partition_vivekDAG	file:
 __anon5bcecbf71902	timer.cpp	/^    tftasks[cluster_id] = _taskflow.emplace([this, cluster_id](){$/;"	f	function:ot::Timer::_GDCA_build_coarsen_graph_par	file:
-__anon5bcecbf71a02	timer.cpp	/^  auto it = std::lower_bound(_global_task_vector.begin(), _global_task_vector.end(), merged_vtas/;"	f	function:ot::Timer::_insert_merged_vivekTask	file:
-__anon5bcecbf71b02	timer.cpp	/^    pin->_ftask = _taskflow.emplace([this, pin] () {$/;"	f	function:ot::Timer::_rebuild_ftask	file:
-__anon5bcecbf71c02	timer.cpp	/^      task->_tftask = _taskflow.emplace([this, task] () {$/;"	f	function:ot::Timer::_rebuild_taskflow_vivek	file:
-__anon5bcecbf71d02	timer.cpp	/^    task->_tftask = _taskflow.emplace([this, task] () {$/;"	f	function:ot::Timer::_rebuild_taskflow_GDCA	file:
+__anon5bcecbf71a02	timer.cpp	/^    task->_tftask = _taskflow.emplace([this, task] () {$/;"	f	function:ot::Timer::_GDCA_build_coarsen_graph_cpu	file:
+__anon5bcecbf71b02	timer.cpp	/^    task->_tftask = _taskflow.emplace([this, task] () {$/;"	f	function:ot::Timer::_GDCA_build_coarsen_graph_cpu	file:
+__anon5bcecbf71c02	timer.cpp	/^  auto it = std::lower_bound(_global_task_vector.begin(), _global_task_vector.end(), merged_vtas/;"	f	function:ot::Timer::_insert_merged_vivekTask	file:
+__anon5bcecbf71d02	timer.cpp	/^    pin->_ftask = _taskflow.emplace([this, pin] () {$/;"	f	function:ot::Timer::_rebuild_ftask	file:
+__anon5bcecbf71e02	timer.cpp	/^      task->_tftask = _taskflow.emplace([this, task] () {$/;"	f	function:ot::Timer::_rebuild_taskflow_vivek	file:
+__anon5bcecbf71f02	timer.cpp	/^    task->_tftask = _taskflow.emplace([this, task] () {$/;"	f	function:ot::Timer::_rebuild_taskflow_GDCA	file:
 __anon5c3c37ad0102	celllib.cpp	/^  auto parser = _taskflow.emplace([path=std::move(path), lib] () {$/;"	f	function:ot::Timer::read_celllib	file:
 __anon5c3c37ad0202	celllib.cpp	/^  auto reader = _taskflow.emplace([this, lib, el] () {$/;"	f	function:ot::Timer::read_celllib	file:
 __anon6933335b0102	sfxt.cpp	/^  return std::visit([this, &ept] (auto&& handle) {$/;"	f	function:ot::Timer::_sfxt_cache	file:
@@ -429,9 +432,10 @@ _partition_result_cpu	timer.hpp	/^    std::vector<int> _partition_result_cpu;$/;
 _partition_result_gpu	timer.hpp	/^    std::vector<int> _partition_result_gpu;$/;"	m	class:ot::Timer	typeref:typename:std::vector<int>
 _partition_timing_profile	timer.cpp	/^void Timer::_partition_timing_profile() {$/;"	f	class:ot::Timer	typeref:typename:void
 _partition_vivekDAG	timer.cpp	/^void Timer::_partition_vivekDAG() {$/;"	f	class:ot::Timer	typeref:typename:void
-_partition_vivekDAG_GDCA	timer.cpp	/^void Timer::_partition_vivekDAG_GDCA() {$/;"	f	class:ot::Timer	typeref:typename:void
 _partition_vivekDAG_GDCA_cpu	timer.cpp	/^void Timer::_partition_vivekDAG_GDCA_cpu() {$/;"	f	class:ot::Timer	typeref:typename:void
 _partition_vivekDAG_GDCA_gpu	timer.cpp	/^void Timer::_partition_vivekDAG_GDCA_gpu() {$/;"	f	class:ot::Timer	typeref:typename:void
+_partition_vivekDAG_GDCA_origin	timer.cpp	/^void Timer::_partition_vivekDAG_GDCA_origin() {$/;"	f	class:ot::Timer	typeref:typename:void
+_partition_vivekDAG_GDCA_topo	timer.cpp	/^void Timer::_partition_vivekDAG_GDCA_topo() {$/;"	f	class:ot::Timer	typeref:typename:void
 _paths	path.hpp	/^    std::vector<std::unique_ptr<Path>> _paths;$/;"	m	class:ot::PathHeap	typeref:typename:std::vector<std::unique_ptr<Path>>
 _paths	pfxt.hpp	/^    std::vector<std::unique_ptr<PfxtNode>> _paths;$/;"	m	class:ot::PfxtCache	typeref:typename:std::vector<std::unique_ptr<PfxtNode>>
 _perform_merge_time	timer.hpp	/^    size_t _perform_merge_time = 0; $/;"	m	class:ot::Timer	typeref:typename:size_t
@@ -587,7 +591,8 @@ _top_down_topo_order_cur_vivekDAG_vector	timer.hpp	/^    std::vector<int> _top_d
 _topo_result_cpu	timer.hpp	/^    std::vector<int> _topo_result_cpu;$/;"	m	class:ot::Timer	typeref:typename:std::vector<int>
 _topo_result_gpu	timer.hpp	/^    std::vector<int> _topo_result_gpu;$/;"	m	class:ot::Timer	typeref:typename:std::vector<int>
 _topologize	sfxt.cpp	/^void Timer::_topologize(SfxtCache& sfxt, size_t v) const {$/;"	f	class:ot::Timer	typeref:typename:void
-_total_num_partitions	timer.hpp	/^    int _total_num_partitions = 0;$/;"	m	class:ot::Timer	typeref:typename:int
+_total_num_partitions_cpu	timer.hpp	/^    int _total_num_partitions_cpu = 0;$/;"	m	class:ot::Timer	typeref:typename:int
+_total_num_partitions_gpu	timer.hpp	/^    int _total_num_partitions_gpu = 0;$/;"	m	class:ot::Timer	typeref:typename:int
 _total_task_visited	timer.hpp	/^    int _total_task_visited = 0;$/;"	m	class:ot::Timer	typeref:typename:int
 _try_merging	timer.cpp	/^void Timer::_try_merging(VivekTask* least_cost_task, std::vector<VivekTask*>& local_task_vector,/;"	f	class:ot::Timer	typeref:typename:void
 _try_merging_time	timer.hpp	/^    size_t _try_merging_time = 0;$/;"	m	class:ot::Timer	typeref:typename:size_t
@@ -790,7 +795,7 @@ ot	verilog.cpp	/^namespace ot {$/;"	n	file:
 ot	vivek.hpp	/^namespace ot {$/;"	n
 parent	pfxt.hpp	/^  const PfxtNode* parent {nullptr};$/;"	m	struct:ot::PfxtNode	typeref:typename:const PfxtNode *
 partition_cpu	partition_cuda.cu	/^void Timer::partition_cpu(std::vector<int>& dep_size, std::vector<int>& partition_result_cpu, st/;"	f	typeref:typename:void Timer::
-partition_size	timer.hpp	/^    int partition_size = 4;$/;"	m	class:ot::Timer	typeref:typename:int
+partition_size	timer.hpp	/^    int partition_size = 11;$/;"	m	class:ot::Timer	typeref:typename:int
 period	clock.hpp	/^inline float Clock::period() const {$/;"	f	class:ot::Clock	typeref:typename:float
 pi	pin.hpp	/^inline auto Pin::At::pi() const {$/;"	f	class:ot::Pin::At	typeref:typename:auto
 pi	pin.hpp	/^inline auto Pin::Rat::pi() const {$/;"	f	class:ot::Pin::Rat	typeref:typename:auto
@@ -879,7 +884,7 @@ split	endpoint.hpp	/^inline Split Endpoint::split() const {$/;"	f	class:ot::Endp
 split	sfxt.hpp	/^inline Split SfxtCache::split() const {$/;"	f	class:ot::SfxtCache	typeref:typename:Split
 test	endpoint.hpp	/^inline const Test* Endpoint::test() const {$/;"	f	class:ot::Endpoint	typeref:typename:const Test *
 test_kernel	topo_cuda.cu	/^__global__ void test_kernel() {$/;"	f	typeref:typename:void
-testing_kernel_2	partition_cuda.cu	/^__global__ void testing_kernel_2($/;"	f	typeref:typename:void
+testing_kernel	partition_cuda.cu	/^__global__ void testing_kernel($/;"	f	typeref:typename:void
 tests	timer.hpp	/^inline const auto& Timer::tests() const {$/;"	f	class:ot::Timer	typeref:typename:const auto &
 through	path.hpp	/^  std::vector<std::string> through;$/;"	m	struct:ot::PathGuide	typeref:typename:std::vector<std::string>
 time_unit	timer.hpp	/^inline auto Timer::time_unit() const {$/;"	f	class:ot::Timer	typeref:typename:auto

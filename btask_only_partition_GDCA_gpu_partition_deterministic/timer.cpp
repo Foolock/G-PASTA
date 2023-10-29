@@ -2113,7 +2113,7 @@ void Timer::_partition_vivekDAG_GDCA_gpu() {
   _export_csr();
 
   // call cuda kernel
-  call_cuda_partition();
+  call_cuda_partition_deterministic();
 
   // get _rebuild_vivekDAG according to GPU result
   _GDCA_build_coarsen_graph_gpu(); 
