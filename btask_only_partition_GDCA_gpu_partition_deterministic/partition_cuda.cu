@@ -27,6 +27,24 @@ void checkError_t(cudaError_t error, std::string msg) {
     }
 }
 
+__device__ int binarySearch(int* segment_heads, int tid, int seg_heads_size) {
+  int low = 0;
+  int high = seg_heads_size - 1;
+  
+  while (low <= high) {
+      int mid = low + (high - low) / 2;
+      
+      if (tid < segment_heads[mid]) {
+          high = mid - 1;
+      } else if (tid >= segment_heads[mid] && (mid == seg_heads_size - 1 || tid < segment_heads[mid + 1])) {
+          return mid;
+      } else {
+          low = mid + 1;
+      }
+  }
+  
+  return -1; // tid is not within any segment
+}
 
 void Timer::partition_cpu_revised(
   std::vector<int>& dep_size, 
@@ -119,9 +137,13 @@ __global__ void check_result_gpu(
   int* d_topo_result_gpu, 
   int* d_topo_fu_partition_result_gpu,
   int* d_seg_heads,
+  int* d_reduce_value,
+  int* d_incre_max_partition_id, // the incremental value to max_partition_id for each node  
+  int* d_new_partition, // decide whether this node should apply d_incre_max_partition_id to get new partition id
   int* d_partition_result_gpu,
   int* d_partition_counter_gpu,
   int* max_partition_id,
+  int* max_incre_value_partition_id,
   int num_nodes, uint32_t* write_size,
   int* d_distance,
   int* d_level
@@ -141,13 +163,99 @@ __global__ void check_result_gpu(
       printf("%d ", d_topo_fu_partition_result_gpu[i]);
     }
     printf("\n");
+    printf("after pushed, d_partition_result_gpu(threadId = %d) = ", tid);
+    for(int i=0; i<num_nodes; i++) {
+      printf("%d ", d_partition_result_gpu[i]);
+    }
+    printf("\n");
     printf("after pushed, d_seg_heads(threadId = %d) = ", tid);
     for(int i=0; i<num_nodes; i++) {
       printf("%d ", d_seg_heads[i]);
     }
     printf("\n");
+    printf("after pushed, d_incre_max_partition_id(threadId = %d) = ", tid);
+    for(int i=0; i<num_nodes; i++) {
+      printf("%d ", d_incre_max_partition_id[i]);
+    }
+    printf("\n");
+    printf("after pushed, d_new_partition(threadId = %d) = ", tid);
+    for(int i=0; i<num_nodes; i++) {
+      printf("%d ", d_new_partition[i]);
+    }
+    printf("\n");
+    printf("after pushed, d_partition_counter_gpu(threadId = %d) = ", tid);
+    for(int i=0; i<num_nodes; i++) {
+      printf("%d ", d_partition_counter_gpu[i]);
+    }
+    printf("\n");
+    printf("after pushed, max_partition_id= %d\n", *max_partition_id);
+    printf("after pushed, max_incre_value_partition_id= %d\n", *max_incre_value_partition_id);
     printf("\n");
     printf("\n");
+  }
+}
+
+__global__ void decide_partition_id( // decide partition id for each node 
+  int* d_topo_result_gpu,
+  int* d_topo_fu_partition_result_gpu, // future partition result stored in topoligical order
+  int* d_partition_counter_gpu,
+  int partition_size,
+  int* max_partition_id,
+  int* max_incre_value_partition_id, // maximum incremental value for max_partition_id
+  int read_offset, uint32_t read_size,
+  int* d_seg_heads, int num_seg_heads,
+  int* d_incre_max_partition_id, // the incremental value to max_partition_id for each node  
+  int* d_new_partition // decide whether this node should apply d_incre_max_partition_id to get new partition id
+) {
+  
+  uint32_t tid = blockDim.x * blockIdx.x + threadIdx.x;
+
+  if(tid < read_size) {
+    // check which segments this tid belongs to
+    int loc_seg = binarySearch(d_seg_heads, tid, num_seg_heads);
+    // check how many nodes can still be merged in this partition
+    int left_over = partition_size - d_partition_counter_gpu[d_topo_fu_partition_result_gpu[read_offset + tid]]; 
+    if(tid < left_over + d_seg_heads[loc_seg]) {
+      d_new_partition[read_offset + tid] = 0; // false
+    }
+    else {
+      d_new_partition[read_offset + tid] = 1; // true
+      d_incre_max_partition_id[read_offset + tid] = 1; // this value will be scanned later to finalize d_incre_max_partition_id
+    }
+  }
+}
+
+__global__ void assign_partition_id(
+  int* d_topo_result_gpu,
+  int* d_topo_fu_partition_result_gpu, // future partition result stored in topoligical order
+  int* d_partition_result_gpu,
+  int* d_partition_counter_gpu,
+  int* max_partition_id,
+  int* max_incre_value_partition_id, // maximum incremental value for max_partition_id
+  int read_offset, uint32_t read_size, // [read_offset, read_offset + read_size - 1] are all the frontiers 
+  int* d_incre_max_partition_id, // the incremental value to max_partition_id for each node  
+  int* d_new_partition // decide whether this node should apply d_incre_max_partition_id to get new partition id
+) {
+
+  uint32_t tid = blockDim.x * blockIdx.x + threadIdx.x;
+
+  if(tid < read_size) {
+    int tid_index = read_offset + tid; // the entry that tid is handling
+    int cur_id = d_topo_result_gpu[tid_index]; // get current task id
+
+    /*
+     * assign partition id to cur nodes according to d_incre_max_partition_id and d_new_partition and d_topo_fu_partition_result_gpu 
+     */
+    if(d_new_partition[tid_index] == 1) {
+      int new_partition_id = *max_partition_id + d_incre_max_partition_id[tid_index];
+      d_partition_result_gpu[cur_id] = new_partition_id;
+      atomicAdd(&d_partition_counter_gpu[new_partition_id], 1);
+      atomicMax(max_incre_value_partition_id, d_incre_max_partition_id[tid_index]);
+    }
+    else {
+      d_partition_result_gpu[cur_id] = d_topo_fu_partition_result_gpu[tid_index];
+      atomicAdd(&d_partition_counter_gpu[d_topo_fu_partition_result_gpu[tid_index]], 1);
+    }
   }
 }
 
@@ -159,31 +267,40 @@ __global__ void partition_gpu_deterministic(
   int* d_partition_counter_gpu,
   int partition_size,
   int* max_partition_id,
+  int* max_incre_value_partition_id, // maximum incremental value for max_partition_id
   int read_offset, uint32_t read_size, // [read_offset, read_offset + read_size - 1] are all the frontiers 
   uint32_t* write_size,
   int* d_distance,
   int* d_level,
-  int* d_fu_partition // the future partition this node will be assigned to(if partition not full)
+  int* d_fu_partition, // the future partition this node will be assigned to(if partition not full)
+  int* d_incre_max_partition_id, // the incremental value to max_partition_id for each node  
+  int* d_new_partition // decide whether this node should apply d_incre_max_partition_id to get new partition id
 ) {
 
   uint32_t tid = blockDim.x * blockIdx.x + threadIdx.x;
 
+  if(tid == 0) {
+    *max_partition_id = *max_partition_id + *max_incre_value_partition_id;
+    *max_incre_value_partition_id = 0;
+  }
+
   if(tid < read_size) {
-    int cur_id = d_topo_result_gpu[read_offset + tid]; // get current task id
-    
-    /*
-     * assign partition id to cur nodes according to d_fu_partition
-     */
-    int cur_partition = d_fu_partition[cur_id]; // get the partition id of the parent that gives this neighbor the shortest path
-    if(atomicAdd(&d_partition_counter_gpu[cur_partition], 1) < partition_size) { 
-      d_partition_result_gpu[cur_id] = cur_partition; // no need to atomic here cuz only one thread will access this neighbor here
-    }
-    else {
-      int new_partition_id = atomicAdd(max_partition_id, 1) + 1; // now we have new partition when we find cur_partition is full
-                                                                 // we need to store this new partition id locally to the thread
-      d_partition_result_gpu[cur_id] = new_partition_id;
-      d_partition_counter_gpu[new_partition_id]++;  
-    }
+    int tid_index = read_offset + tid; // the entry that tid is handling
+    int cur_id = d_topo_result_gpu[tid_index]; // get current task id
+
+    // /*
+    //  * assign partition id to cur nodes according to d_incre_max_partition_id and d_new_partition and d_topo_fu_partition_result_gpu 
+    //  */
+    // if(d_new_partition[tid_index] == 1) {
+    //   int new_partition_id = *max_partition_id + d_incre_max_partition_id[tid_index];
+    //   d_partition_result_gpu[cur_id] = new_partition_id;
+    //   d_partition_counter_gpu[new_partition_id] ++;
+    //   atomicMax(max_incre_value_partition_id, d_incre_max_partition_id[tid_index]);
+    // }
+    // else {
+    //   d_partition_result_gpu[cur_id] = d_topo_fu_partition_result_gpu[tid_index];
+    //   d_partition_counter_gpu[d_topo_fu_partition_result_gpu[tid_index]] ++;
+    // }
 
     /*
      * then release dependents for its neighbor
@@ -507,6 +624,7 @@ void Timer::call_cuda_partition_deterministic() {
   uint32_t read_size = source.size();
   uint32_t* write_size;
   int* max_partition_id; // max_partition id we have currently, initially is source.size() - 1
+  int* max_incre_value_partition_id; // maximum incremental value for max_partition_id, initially is 0
 
   std::vector<int> distance(num_nodes, INT_MAX);
   // initialize distance
@@ -529,7 +647,7 @@ void Timer::call_cuda_partition_deterministic() {
   }
   int* d_fu_partition;
 
-  std::vector<int> topo_fu_partition(source.size(), -1);
+  std::vector<int> topo_fu_partition(num_nodes, -1);
   for(unsigned i=0; i<source.size(); i++) {
     topo_fu_partition[i] = fu_partition[source[i]];
   }
@@ -540,7 +658,7 @@ void Timer::call_cuda_partition_deterministic() {
   int* d_seg_heads; // output values of reduce by key
 
   // reshape _topo_result_gpu
-  _topo_result_gpu.resize(num_nodes);
+  _topo_result_gpu.resize(num_nodes, -1);
 
   // initialize partition with each source node as 1 partition
   _partition_result_gpu.resize(num_nodes, -1);
@@ -550,15 +668,17 @@ void Timer::call_cuda_partition_deterministic() {
   // the number of partition = (num_nodes + partition_size - 1) / partition_size
   // _partition_counter_gpu.resize((num_nodes + partition_size - 1) / partition_size, 0);
   _partition_counter_gpu.resize(num_nodes, 0);
-  for(unsigned i=0; i<source.size(); i++) { // at the beginning, each source corresponds to one partition
-    _partition_counter_gpu[i]++;
-  }
  
   // for testing_kernel_2
   std::vector<int> atomic_partition_counter_node(num_nodes, 0);
   for(auto id : source) {
     atomic_partition_counter_node[id] = 1;
   }
+  
+  int* d_incre_max_partition_id; // the incremental value to max_partition_id for each node  
+  int* d_new_partition; // decide whether this node should apply d_incre_max_partition_id to get new partition id
+  std::vector<int> incre_max_partition_id(num_nodes, 0);
+  std::vector<int> new_partition(num_nodes, 0);
 
   checkError_t(cudaMalloc(&d_adjp, sizeof(int)*num_nodes), "d_adjp allocation failed");
   checkError_t(cudaMalloc(&d_adjncy, sizeof(int)*num_edges), "d_adjncy allocation failed");
@@ -570,12 +690,15 @@ void Timer::call_cuda_partition_deterministic() {
   checkError_t(cudaMalloc(&d_partition_counter_gpu, sizeof(int)*num_nodes), "d_partition_counter_gpu allocation failed");
   checkError_t(cudaMalloc(&write_size, sizeof(uint32_t)), "write_size allocation failed");
   checkError_t(cudaMalloc(&max_partition_id, sizeof(int)), "max_partition_id allocation failed");
+  checkError_t(cudaMalloc(&max_incre_value_partition_id, sizeof(int)), "max_incre_value_partition_id allocation failed");
   checkError_t(cudaMalloc(&d_distance, sizeof(int)*num_nodes), "d_distance allocation failed");
   checkError_t(cudaMalloc(&d_level, sizeof(int)*num_nodes), "d_level allocation failed");
   checkError_t(cudaMalloc(&d_fu_partition, sizeof(int)*num_nodes), "d_fu_partition allocation failed");
   checkError_t(cudaMalloc(&d_reduce_value, sizeof(int)*num_nodes), "d_reduce_value allocation failed");
   checkError_t(cudaMalloc(&d_output_keys, sizeof(int)*num_nodes), "d_output_keys allocation failed");
   checkError_t(cudaMalloc(&d_seg_heads, sizeof(int)*num_nodes), "d_seg_heads allocation failed");
+  checkError_t(cudaMalloc(&d_incre_max_partition_id, sizeof(int)*num_nodes), "d_incre_max_partition_id allocation failed");
+  checkError_t(cudaMalloc(&d_new_partition, sizeof(int)*num_nodes), "d_incre_max_partition_id allocation failed");
 
   auto start = std::chrono::steady_clock::now();
   checkError_t(cudaMemcpy(d_adjp, _adjp.data(), sizeof(int)*num_nodes, cudaMemcpyHostToDevice), "d_adjp memcpy failed"); 
@@ -588,13 +711,16 @@ void Timer::call_cuda_partition_deterministic() {
   checkError_t(cudaMemcpy(d_partition_counter_gpu, _partition_counter_gpu.data(), sizeof(int)*num_nodes, cudaMemcpyHostToDevice), "d_partition_counter_gpu memcpy failed"); 
   checkError_t(cudaMemset(write_size, 0, sizeof(uint32_t)), "write_size memset failed");
   int max_partition_id_cpu = source.size() - 1;
+  int max_incre_value_partition_id_cpu = 0;
   // checkError_t(cudaMemset(max_partition_id, 0x00000001, sizeof(int)), "max_partition_id memset failed");
   checkError_t(cudaMemcpy(max_partition_id, &max_partition_id_cpu, sizeof(int), cudaMemcpyHostToDevice), "max_partition_id memcpy failed"); 
+  checkError_t(cudaMemcpy(max_incre_value_partition_id, &max_incre_value_partition_id_cpu, sizeof(int), cudaMemcpyHostToDevice), "max_incre_value_partition_id memcpy failed"); 
   checkError_t(cudaMemcpy(d_distance, distance.data(), sizeof(int)*num_nodes, cudaMemcpyHostToDevice), "d_distance memcpy failed"); 
   checkError_t(cudaMemcpy(d_level, level.data(), sizeof(int)*num_nodes, cudaMemcpyHostToDevice), "d_level memcpy failed"); 
   checkError_t(cudaMemcpy(d_fu_partition, fu_partition.data(), sizeof(int)*num_nodes, cudaMemcpyHostToDevice), "d_fu_partition memcpy failed"); 
   checkError_t(cudaMemcpy(d_reduce_value, reduce_value.data(), sizeof(int)*num_nodes, cudaMemcpyHostToDevice), "d_reduce_value memcpy failed"); 
-
+  checkError_t(cudaMemcpy(d_incre_max_partition_id, incre_max_partition_id.data(), sizeof(int)*num_nodes, cudaMemcpyHostToDevice), "d_incre_max_partition_id memcpy failed"); 
+  checkError_t(cudaMemcpy(d_new_partition, new_partition.data(), sizeof(int)*num_nodes, cudaMemcpyHostToDevice), "d_new_partition memcpy failed"); 
 
   // invoke kernel
   unsigned num_block;
@@ -608,6 +734,18 @@ void Timer::call_cuda_partition_deterministic() {
       std::cerr << "threads resource cannot handle one level of BFS node.\n";
       std::exit(EXIT_FAILURE);
     }
+      
+    assign_partition_id<<<num_block, BLOCK_SIZE>>>(
+      d_topo_result_gpu,
+      d_topo_fu_partition_result_gpu, // future partition result stored in topoligical order
+      d_partition_result_gpu,
+      d_partition_counter_gpu,
+      max_partition_id,
+      max_incre_value_partition_id, // maximum incremental value for max_partition_id
+      read_offset, read_size, // [read_offset, read_offset + read_size - 1] are all the frontiers 
+      d_incre_max_partition_id, // the incremental value to max_partition_id for each node  
+      d_new_partition // decide whether this node should apply d_incre_max_partition_id to get new partition id
+    );
 
     partition_gpu_deterministic<<<num_block, BLOCK_SIZE>>>(
       d_adjp, d_adjncy, d_adjncy_size, d_dep_size,
@@ -617,11 +755,14 @@ void Timer::call_cuda_partition_deterministic() {
       d_partition_counter_gpu,
       partition_size,
       max_partition_id,
+      max_incre_value_partition_id, // maximum incremental value for max_partition_id
       read_offset, read_size, // [read_offset, read_offset + read_size - 1] are all the frontiers 
       write_size,
       d_distance,
       d_level,
-      d_fu_partition
+      d_fu_partition,
+      d_incre_max_partition_id, // the incremental value to max_partition_id for each node  
+      d_new_partition // decide whether this node should apply d_incre_max_partition_id to get new partition id
     );
    
     cudaError_t err = cudaGetLastError();
@@ -636,27 +777,55 @@ void Timer::call_cuda_partition_deterministic() {
     // set write_size = 0 for next iteration 
     checkError_t(cudaMemset(write_size, 0, sizeof(uint32_t)), "write_size rewrite failed");
 
+    if(read_size == 0) {
+      continue;
+    }
     /*
      * to make partition result deterministic
      * 1. sort d_topo_result[read_offset, read_offset + read_size - 1] by using d_fu_partition as their key
      * 2. reduce by key to get segment head for segmented sort
      * 3. segmented sort d_topo_result[read_offset, read_offset + read_size - 1] by using the d_topo_result[i].value() 
      */
+
     mgpu::mergesort(d_topo_fu_partition_result_gpu+read_offset, d_topo_result_gpu+read_offset, read_size, []MGPU_DEVICE(int a, int b){return a < b;}, context);
-    thrust::reduce_by_key(thrust::device, d_topo_fu_partition_result_gpu+read_offset, d_topo_fu_partition_result_gpu+read_offset+read_size, d_reduce_value, d_output_keys, d_seg_heads); 
+    thrust::pair<int*,int*> new_end;
+    new_end = thrust::reduce_by_key(thrust::device, d_topo_fu_partition_result_gpu+read_offset, d_topo_fu_partition_result_gpu+read_offset+read_size, d_reduce_value+read_offset, d_output_keys, d_seg_heads); // no offset for output_keys and seg_heads(output_values), so they will be overwritten.  
+    int num_seg_heads = static_cast<int>(new_end.second - (d_seg_heads));
+    thrust::exclusive_scan(thrust::device, d_seg_heads, d_seg_heads + num_seg_heads, d_seg_heads, 0); // in-place scan for seg_heads(before seg_head[i] is length of each segments)
+    mgpu::segmented_sort(d_topo_result_gpu+read_offset, read_size, d_seg_heads, num_seg_heads, []MGPU_DEVICE(int a, int b){return a < b;}, context);
 
-    check_result_gpu<<<1, 1>>>(
+    decide_partition_id<<<num_block, BLOCK_SIZE>>>( // decide partition id for each node 
       d_topo_result_gpu,
-      d_topo_fu_partition_result_gpu,
-      d_seg_heads,
-      d_partition_result_gpu,
+      d_topo_fu_partition_result_gpu, // future partition result stored in topoligical order
       d_partition_counter_gpu,
+      partition_size,
       max_partition_id,
-      num_nodes, write_size,
-      d_distance,
-      d_level
-    );
+      max_incre_value_partition_id, // maximum incremental value for max_partition_id
+      read_offset, read_size,
+      d_seg_heads, num_seg_heads,
+      d_incre_max_partition_id, // the incremental value to max_partition_id for each node  
+      d_new_partition // decide whether this node should apply d_incre_max_partition_id to get new partition id
+    ); 
 
+    thrust::inclusive_scan(thrust::device, d_incre_max_partition_id+read_offset, d_incre_max_partition_id+read_offset+read_size, d_incre_max_partition_id+read_offset);
+ 
+    // std::cout << "read_offset = " << read_offset << "\n";
+    // std::cout << "read_size = " << read_size << "\n";
+    // check_result_gpu<<<1, 1>>>(
+    //   d_topo_result_gpu,
+    //   d_topo_fu_partition_result_gpu,
+    //   d_seg_heads,
+    //   d_reduce_value,
+    //   d_incre_max_partition_id, // the incremental value to max_partition_id for each node  
+    //   d_new_partition, // decide whether this node should apply d_incre_max_partition_id to get new partition id
+    //   d_partition_result_gpu,
+    //   d_partition_counter_gpu,
+    //   max_partition_id,
+    //   max_incre_value_partition_id, // maximum incremental value for max_partition_id
+    //   num_nodes, write_size,
+    //   d_distance,
+    //   d_level
+    // );
   }
 
   checkError_t(cudaMemcpy(_topo_result_gpu.data(), d_topo_result_gpu, sizeof(int)*num_nodes, cudaMemcpyDeviceToHost), "_topo_result_gpu memcpy failed"); 
@@ -664,6 +833,7 @@ void Timer::call_cuda_partition_deterministic() {
   auto end = std::chrono::steady_clock::now();
   GPU_topo_runtime += std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
   checkError_t(cudaMemcpy(&max_partition_id_cpu, max_partition_id, sizeof(int), cudaMemcpyDeviceToHost), "max_partition_id_cpu memcpy failed"); 
+  std::cout << "max_partition_id_cpu = " << max_partition_id_cpu << "\n";
   _total_num_partitions_gpu = max_partition_id_cpu + 1;
 
   // print gpu topo result
@@ -692,12 +862,15 @@ void Timer::call_cuda_partition_deterministic() {
   checkError_t(cudaFree(d_partition_counter_gpu), "d_partition_counter_gpu free failed");
   checkError_t(cudaFree(write_size), "write_size free failed");
   checkError_t(cudaFree(max_partition_id), "max_partition_id free failed");
+  checkError_t(cudaFree(max_incre_value_partition_id), "max_incre_value_partition_id free failed");
   checkError_t(cudaFree(d_distance), "d_distance free failed");
   checkError_t(cudaFree(d_level), "level free failed");
   checkError_t(cudaFree(d_fu_partition), "fu_partition free failed");
   checkError_t(cudaFree(d_reduce_value), "d_reduce_value free failed");
   checkError_t(cudaFree(d_output_keys), "d_output_keys free failed");
   checkError_t(cudaFree(d_seg_heads), "d_seg_heads free failed");
+  checkError_t(cudaFree(d_incre_max_partition_id), "d_incre_max_partition_id free failed");
+  checkError_t(cudaFree(d_new_partition), "d_incre_max_partition_id free failed");
   
   /*
    * partition cpu version
