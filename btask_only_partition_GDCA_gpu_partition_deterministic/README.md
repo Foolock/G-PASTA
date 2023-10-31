@@ -6,3 +6,4 @@ The reason I am not doing this now is that current ctest cases won't have this p
 5. implementing latest cycle elimination idea, 1st. adjacent level, 2nd. shortest path, 3rd. smallest partition id.
 6. idea implemented. ctest cycles removed
 7. cycles still appears when partition size increases! But I use a simple rule to remove it: just select the largest partition for each node from its parents. Cuz partition id increases from top to down.
+8. making partition result deterministic
