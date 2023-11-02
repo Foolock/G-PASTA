@@ -406,6 +406,7 @@ COMPILER_VERSION_PATCH	moderngpu/build/CMakeFiles/3.22.1/CompilerIdCXX/CMakeCXXC
 COMPILER_VERSION_PATCH	moderngpu/build/CMakeFiles/3.22.1/CompilerIdCXX/CMakeCXXCompilerId.cpp	/^# define COMPILER_VERSION_PATCH /;"	d	file:
 COMPILER_VERSION_TWEAK	moderngpu/build/CMakeFiles/3.22.1/CompilerIdCXX/CMakeCXXCompilerId.cpp	/^#  define COMPILER_VERSION_TWEAK /;"	d	file:
 COMPILER_VERSION_TWEAK	moderngpu/build/CMakeFiles/3.22.1/CompilerIdCXX/CMakeCXXCompilerId.cpp	/^# define COMPILER_VERSION_TWEAK /;"	d	file:
+CPU_par_runtime	timer.hpp	/^    size_t CPU_par_runtime = 0;$/;"	m	class:ot::Timer	typeref:typename:size_t
 CPU_topo_runtime	timer.hpp	/^    size_t CPU_topo_runtime = 0;$/;"	m	class:ot::Timer	typeref:typename:size_t
 CUDA_C_16BF	moderngpu/build/CMakeFiles/3.22.1/CompilerIdCUDA/tmp/CMakeCUDACompilerId.cudafe1.cpp	/^CUDA_C_16BF, $/;"	e	enum:cudaDataType_t	file:
 CUDA_C_16F	moderngpu/build/CMakeFiles/3.22.1/CompilerIdCUDA/tmp/CMakeCUDACompilerId.cudafe1.cpp	/^CUDA_C_16F = 6, $/;"	e	enum:cudaDataType_t	file:
@@ -480,6 +481,9 @@ FP_ZERO	moderngpu/build/CMakeFiles/3.22.1/CompilerIdCUDA/tmp/CMakeCUDACompilerId
 FULL_TIMING	timer.hpp	/^  constexpr static int FULL_TIMING   = 0x01;$/;"	m	class:ot::Timer	typeref:typename:int
 GDCA_build_coarsen_graph_time	timer.hpp	/^    size_t GDCA_build_coarsen_graph_time = 0;$/;"	m	class:ot::Timer	typeref:typename:size_t
 GDCA_dfs_time	timer.hpp	/^    size_t GDCA_dfs_time = 0;$/;"	m	class:ot::Timer	typeref:typename:size_t
+GDCA_par_runtime	timer.hpp	/^    size_t GDCA_par_runtime = 0;$/;"	m	class:ot::Timer	typeref:typename:size_t
+GPU_par_deter_runtime	timer.hpp	/^    size_t GPU_par_deter_runtime = 0;$/;"	m	class:ot::Timer	typeref:typename:size_t
+GPU_par_runtime	timer.hpp	/^    size_t GPU_par_runtime = 0;$/;"	m	class:ot::Timer	typeref:typename:size_t
 GPU_topo_runtime	timer.hpp	/^    size_t GPU_topo_runtime = 0;$/;"	m	class:ot::Timer	typeref:typename:size_t
 Gate	gate.cpp	/^Gate::Gate(const std::string& name, CellView cell) : $/;"	f	class:ot::Gate
 Gate	gate.hpp	/^class Gate {$/;"	c	namespace:ot
@@ -897,15 +901,12 @@ __anon5bcecbf71402	timer.cpp	/^  auto op = _taskflow.emplace([this, name=std::mo
 __anon5bcecbf71502	timer.cpp	/^  auto task = _taskflow.emplace([this, name=std::move(name), m, t, v] () {$/;"	f	function:ot::Timer::set_slew	file:
 __anon5bcecbf71602	timer.cpp	/^  auto task = _taskflow.emplace([this, name=std::move(name), m, t, v] () {$/;"	f	function:ot::Timer::set_load	file:
 __anon5bcecbf71702	timer.cpp	/^  std::sort(_global_task_vector.begin(), _global_task_vector.end(), [](const VivekTask* a, Vivek/;"	f	function:ot::Timer::_initialize_vivekDAG	file:
-__anon5bcecbf71802	timer.cpp	/^    task->_tftask = _taskflow.emplace([this, task] () {$/;"	f	function:ot::Timer::_export_csr	file:
-__anon5bcecbf71902	timer.cpp	/^    std::sort(local_task_vector.begin(), local_task_vector.end(), [](const VivekTask* a, VivekTa/;"	f	function:ot::Timer::_partition_vivekDAG	file:
-__anon5bcecbf71a02	timer.cpp	/^    tftasks[cluster_id] = _taskflow.emplace([this, cluster_id](){$/;"	f	function:ot::Timer::_GDCA_build_coarsen_graph_par	file:
-__anon5bcecbf71b02	timer.cpp	/^    task->_tftask = _taskflow.emplace([this, task] () {$/;"	f	function:ot::Timer::_GDCA_build_coarsen_graph_cpu	file:
-__anon5bcecbf71c02	timer.cpp	/^    task->_tftask = _taskflow.emplace([this, task] () {$/;"	f	function:ot::Timer::_GDCA_build_coarsen_graph_cpu	file:
-__anon5bcecbf71d02	timer.cpp	/^  auto it = std::lower_bound(_global_task_vector.begin(), _global_task_vector.end(), merged_vtas/;"	f	function:ot::Timer::_insert_merged_vivekTask	file:
-__anon5bcecbf71e02	timer.cpp	/^    pin->_ftask = _taskflow.emplace([this, pin] () {$/;"	f	function:ot::Timer::_rebuild_ftask	file:
-__anon5bcecbf71f02	timer.cpp	/^      task->_tftask = _taskflow.emplace([this, task] () {$/;"	f	function:ot::Timer::_rebuild_taskflow_vivek	file:
-__anon5bcecbf72002	timer.cpp	/^    task->_tftask = _taskflow.emplace([this, task] () {$/;"	f	function:ot::Timer::_rebuild_taskflow_GDCA	file:
+__anon5bcecbf71802	timer.cpp	/^    std::sort(local_task_vector.begin(), local_task_vector.end(), [](const VivekTask* a, VivekTa/;"	f	function:ot::Timer::_partition_vivekDAG	file:
+__anon5bcecbf71902	timer.cpp	/^    tftasks[cluster_id] = _taskflow.emplace([this, cluster_id](){$/;"	f	function:ot::Timer::_GDCA_build_coarsen_graph_par	file:
+__anon5bcecbf71a02	timer.cpp	/^  auto it = std::lower_bound(_global_task_vector.begin(), _global_task_vector.end(), merged_vtas/;"	f	function:ot::Timer::_insert_merged_vivekTask	file:
+__anon5bcecbf71b02	timer.cpp	/^    pin->_ftask = _taskflow.emplace([this, pin] () {$/;"	f	function:ot::Timer::_rebuild_ftask	file:
+__anon5bcecbf71c02	timer.cpp	/^      task->_tftask = _taskflow.emplace([this, task] () {$/;"	f	function:ot::Timer::_rebuild_taskflow_vivek	file:
+__anon5bcecbf71d02	timer.cpp	/^    task->_tftask = _taskflow.emplace([this, task] () {$/;"	f	function:ot::Timer::_rebuild_taskflow_GDCA	file:
 __anon5c3c37ad0102	celllib.cpp	/^  auto parser = _taskflow.emplace([path=std::move(path), lib] () {$/;"	f	function:ot::Timer::read_celllib	file:
 __anon5c3c37ad0202	celllib.cpp	/^  auto reader = _taskflow.emplace([this, lib, el] () {$/;"	f	function:ot::Timer::read_celllib	file:
 __anon6933335b0102	sfxt.cpp	/^  return std::visit([this, &ept] (auto&& handle) {$/;"	f	function:ot::Timer::_sfxt_cache	file:
@@ -2837,6 +2838,7 @@ _partition_timing_profile	timer.cpp	/^void Timer::_partition_timing_profile() {$
 _partition_vivekDAG	timer.cpp	/^void Timer::_partition_vivekDAG() {$/;"	f	class:ot::Timer	typeref:typename:void
 _partition_vivekDAG_GDCA_cpu	timer.cpp	/^void Timer::_partition_vivekDAG_GDCA_cpu() {$/;"	f	class:ot::Timer	typeref:typename:void
 _partition_vivekDAG_GDCA_gpu	timer.cpp	/^void Timer::_partition_vivekDAG_GDCA_gpu() {$/;"	f	class:ot::Timer	typeref:typename:void
+_partition_vivekDAG_GDCA_gpu_deterministic	timer.cpp	/^void Timer::_partition_vivekDAG_GDCA_gpu_deterministic() {$/;"	f	class:ot::Timer	typeref:typename:void
 _partition_vivekDAG_GDCA_origin	timer.cpp	/^void Timer::_partition_vivekDAG_GDCA_origin() {$/;"	f	class:ot::Timer	typeref:typename:void
 _partition_vivekDAG_GDCA_topo	timer.cpp	/^void Timer::_partition_vivekDAG_GDCA_topo() {$/;"	f	class:ot::Timer	typeref:typename:void
 _paths	path.hpp	/^    std::vector<std::unique_ptr<Path>> _paths;$/;"	m	class:ot::PathHeap	typeref:typename:std::vector<std::unique_ptr<Path>>
@@ -3676,6 +3678,7 @@ decay	moderngpu/build/CMakeFiles/3.22.1/CompilerIdCUDA/tmp/CMakeCUDACompilerId.c
 decay_t	moderngpu/build/CMakeFiles/3.22.1/CompilerIdCUDA/tmp/CMakeCUDACompilerId.cudafe1.cpp	/^template< class _Tp> using decay_t = typename decay< _Tp> ::type; $/;"	t	namespace:std	typeref:typename:decay<_Tp>::type	file:
 decay_t	moderngpu/src/moderngpu/tuple.hxx	/^using decay_t = typename std::decay<type_t>::type;$/;"	t	typeref:typename:std::decay<type_t>::type
 decide_partition_id	partition_cuda.cu	/^__global__ void decide_partition_id( \/\/ decide partition id for each node $/;"	f	typeref:typename:void
+decide_partition_id_shmem	partition_cuda.cu	/^__global__ void decide_partition_id_shmem( \/\/ decide partition id for each node $/;"	f	typeref:typename:void
 decisions	moderngpu/src/moderngpu/cta_search.hxx	/^  int decisions;              \/\/ Set a bit if this iteration has progressed A.$/;"	m	struct:search_result_t	typeref:typename:int
 declval	moderngpu/build/CMakeFiles/3.22.1/CompilerIdCUDA/tmp/CMakeCUDACompilerId.cudafe1.cpp	/^declval() noexcept->__decltype((__declval< _Tp> (0))) $/;"	f	namespace:std	typeref:typename:auto
 default_target	moderngpu/build/Makefile	/^default_target: all$/;"	t
@@ -5394,7 +5397,7 @@ partition_cpu	partition_cuda.cu	/^void Timer::partition_cpu(std::vector<int>& de
 partition_cpu_revised	partition_cuda.cu	/^void Timer::partition_cpu_revised($/;"	f	typeref:typename:void Timer::
 partition_gpu	partition_cuda.cu	/^__global__ void partition_gpu($/;"	f	typeref:typename:void
 partition_gpu_deterministic	partition_cuda.cu	/^__global__ void partition_gpu_deterministic($/;"	f	typeref:typename:void
-partition_size	timer.hpp	/^    int partition_size = 4;$/;"	m	class:ot::Timer	typeref:typename:int
+partition_size	timer.hpp	/^    int partition_size = 11;$/;"	m	class:ot::Timer	typeref:typename:int
 partitions	moderngpu/src/moderngpu/kernel_segsort.hxx	/^          int partitions[nt + 1];$/;"	m	union:detail::segsort_t::merge_passes::__anonb62a9589060a	typeref:typename:int[]
 period	clock.hpp	/^inline float Clock::period() const {$/;"	f	class:ot::Clock	typeref:typename:float
 pi	pin.hpp	/^inline auto Pin::At::pi() const {$/;"	f	class:ot::Pin::At	typeref:typename:auto

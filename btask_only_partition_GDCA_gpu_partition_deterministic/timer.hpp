@@ -43,8 +43,10 @@ class Timer {
    
     ~Timer() {
 
-      std::cout << "CPU_topo(partition)_runtime: " << CPU_topo_runtime << "\n";
-      std::cout << "GPU_topo(partition)_runtime: " << GPU_topo_runtime << "\n";
+      std::cout << "GDCA_par_runtime: " << GDCA_par_runtime << "\n";  
+      std::cout << "CPU_par_runtime(sequential): " << CPU_par_runtime << "\n"; 
+      std::cout << "GPU_par_runtime(non-deterministic): " << GPU_par_runtime << "\n";
+      std::cout << "GPU_par_deter_runtime(deterministic): " << GPU_par_deter_runtime << "\n";
       std::cout << "_vivek_btask_rebuild_time: " << _vivek_btask_rebuild_time << "\n";
       std::cout << "_vivek_btask_runtime: " << _vivek_btask_runtime << "\n";
 
@@ -151,7 +153,7 @@ class Timer {
     void call_cuda_partition_deterministic();
     void bfs_cpu(std::vector<int>& distance, std::vector<int>& parent);
     void topo_cpu(std::vector<int>& dep_size);
-    int partition_size = 101;
+    int partition_size = 20;
     void partition_cpu(std::vector<int>& dep_size, std::vector<int>& partition_result_cpu, std::vector<int>& partition_counter_cpu, int* max_partition_id); 
     void partition_cpu_revised(std::vector<int>& dep_size, std::vector<int>& partition_result_cpu, std::vector<int>& partition_counter_cpu, std::vector<int>& fu_partition, int* max_partition_id); 
 
@@ -363,6 +365,11 @@ class Timer {
     size_t CPU_topo_runtime = 0;
     size_t GPU_topo_runtime = 0;
 
+    size_t GDCA_par_runtime = 0;
+    size_t CPU_par_runtime = 0;
+    size_t GPU_par_runtime = 0;
+    size_t GPU_par_deter_runtime = 0;
+
     VivekDAG _vivekDAG;
     VivekDAG _rebuild_vivekDAG;   
 
@@ -408,6 +415,7 @@ class Timer {
     void _partition_vivekDAG_GDCA_origin(); // older version of GDCA implementation
     void _partition_vivekDAG_GDCA_cpu();
     void _partition_vivekDAG_GDCA_gpu();
+    void _partition_vivekDAG_GDCA_gpu_deterministic();
     void _partition_vivekDAG_GDCA_topo();
     void _GDCA_dfs();
     void _GDCA_build_coarsen_graph();  

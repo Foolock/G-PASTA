@@ -1027,7 +1027,7 @@ void Timer::_update_timing() {
   _initialize_vivekDAG();
  
   // partition vivekDAG 
-  _partition_vivekDAG_GDCA_gpu();
+  _partition_vivekDAG_GDCA_gpu_deterministic();
 
   // rebuild _taskflow by vivekDAG
   auto start = std::chrono::steady_clock::now();
@@ -1983,7 +1983,7 @@ void Timer::_GDCA_dfs() {
     cur_cluster_id++;
   } 
   auto end = std::chrono::steady_clock::now();
-  CPU_topo_runtime += std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
+  GDCA_par_runtime += std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
   _vivekDAG._vtask_clusters.resize(cur_cluster_id);
 }
 
@@ -2107,13 +2107,33 @@ void Timer::_partition_vivekDAG_GDCA_cpu() {
   // std::cout << "_total_task_visited = " << _total_task_visited << "\n";
 }
 
-void Timer::_partition_vivekDAG_GDCA_gpu() {
+void Timer::_partition_vivekDAG_GDCA_gpu_deterministic() {
 
   // export a csr format of vivekDAG 
   _export_csr();
 
   // call cuda kernel
   call_cuda_partition_deterministic();
+
+  // get _rebuild_vivekDAG according to GPU result
+  _GDCA_build_coarsen_graph_gpu(); 
+
+  // check legitness of DAG
+  bool result = _check_DAG_cycle();
+  if(result) {
+    std::cerr << "this rebuild vivekDAG has cycle.\n";
+    std::exit(EXIT_FAILURE);
+  }
+  // std::cout << "_total_task_visited = " << _total_task_visited << "\n";
+}
+
+void Timer::_partition_vivekDAG_GDCA_gpu() {
+
+  // export a csr format of vivekDAG 
+  _export_csr();
+
+  // call cuda kernel
+  call_cuda_partition();
 
   // get _rebuild_vivekDAG according to GPU result
   _GDCA_build_coarsen_graph_gpu(); 
@@ -2210,14 +2230,12 @@ void Timer::_GDCA_build_coarsen_graph_cpu() {
   }
 
   // traverse _topo_result_cpu, assigned _vivekDAG._vtask_clusters -> such as to ensure each cluster has topological order
-  std::cout << "_total_num_partitions_cpu = " << _total_num_partitions_cpu << "\n";
   int max = _partition_result_cpu[0];  // Initialize max with the first element of the vector
   for (size_t i = 1; i < _partition_result_cpu.size(); ++i) {
     if (_partition_result_cpu[i] > max) {
       max = _partition_result_cpu[i];
     }
   }
-  std::cout << "max = " << max << "\n";
   _vivekDAG._vtask_clusters.resize(_total_num_partitions_cpu);
   for(auto task_id : _topo_result_cpu) {
     VivekTask* task_ptr = _vivekDAG._vtask_ptrs[task_id];
@@ -2254,78 +2272,7 @@ void Timer::_GDCA_build_coarsen_graph_cpu() {
 
   std::cout << "before partition, graph size: " << _vivekDAG._vtask_ptrs.size() << "\n";
   std::cout << "after GDCA partition, graph size: " << _rebuild_vivekDAG._vtask_ptrs.size() << "\n";
-
-  // check taskflow after partition
-  _taskflow.clear();
-
-  // emplace all tasks in vivekDAG to _taskflow
-  for(auto task : _vivekDAG._vtask_ptrs) {
-    task->_tftask = _taskflow.emplace([this, task] () {
-      auto start = std::chrono::steady_clock::now();
-      for(auto pair : task->_pins) {
-        if(pair.first) {
-          _fprop_rc_timing(*(pair.second));
-          _fprop_slew(*(pair.second));
-          _fprop_delay(*(pair.second));
-          _fprop_at(*(pair.second));
-          _fprop_test(*(pair.second));
-        }
-        else {
-          _bprop_rat(*(pair.second));
-        }
-      }
-      auto end = std::chrono::steady_clock::now();
-      task->_runtime = std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
-    }).name(std::to_string(task->_cluster_id));
-    // }).name(task->_pins[0].second->_name + "(" + std::to_string(task->_id) + ")");
-  }
-
-  // add dependencies in _taskflow
-  for(size_t task_id=0; task_id<_vivekDAG._vtask_ptrs.size(); task_id++) {
-    for(auto successor_id : _vivekDAG._vtask_ptrs[task_id]->_fanout) {
-        _vivekDAG._vtask_ptrs[task_id]->_tftask.precede(_vivekDAG._vtask_ptrs[successor_id]->_tftask);
-    }
-  } 
-
-  _taskflow.dump(std::cout);
-  _taskflow.clear();
-
-  // check taskflow after partition
-  _taskflow.clear();
-
-  // emplace all tasks in rebuild_vivekDAG to _taskflow
-  for(auto task : _rebuild_vivekDAG._vtask_ptrs) {
-    task->_tftask = _taskflow.emplace([this, task] () {
-      auto start = std::chrono::steady_clock::now();
-      for(auto pair : task->_pins) {
-        if(pair.first) {
-          _fprop_rc_timing(*(pair.second));
-          _fprop_slew(*(pair.second));
-          _fprop_delay(*(pair.second));
-          _fprop_at(*(pair.second));
-          _fprop_test(*(pair.second));
-        }
-        else {
-          _bprop_rat(*(pair.second));
-        }
-      }
-      auto end = std::chrono::steady_clock::now();
-      task->_runtime = std::chrono::duration_cast<std::chrono::microseconds>(end-start).count();
-    }).name(std::to_string(task->_id));
-    // }).name(task->_pins[0].second->_name + "(" + std::to_string(task->_id) + ")");
-  }
-
-  // add dependencies in _taskflow
-  for(size_t task_id=0; task_id<_rebuild_vivekDAG._vtask_ptrs.size(); task_id++) {
-    for(auto successor_id : _rebuild_vivekDAG._vtask_ptrs[task_id]->_fanout) {
-        _rebuild_vivekDAG._vtask_ptrs[task_id]->_tftask.precede(_rebuild_vivekDAG._vtask_ptrs[successor_id]->_tftask);
-    }
-  } 
-
-  _taskflow.dump(std::cout);
-  _taskflow.clear();
-
-
+  
 }
 
 void Timer::_GDCA_build_coarsen_graph_gpu() {
