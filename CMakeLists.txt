@@ -34,7 +34,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 set(CMAKE_CUDA_STANDARD 17)
 if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
-  set(CMAKE_CUDA_ARCHITECTURES 75)
+  set(CMAKE_CUDA_ARCHITECTURES 86)
 endif()
 # compile and link CUDA code separately from the rest of your code to
 # speed up the build process and reduce the size of your final executable.
@@ -43,6 +43,7 @@ set(CMAKE_CUDA_SEPARABLE_COMPILATION ON)
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -O2")
 endif()
+  set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Wall -O2 --extended-lambda")
 
 # Check if static build
 if(CMAKE_EXE_LINKER_FLAGS)
@@ -158,7 +159,8 @@ set(OT_CPP
   ot/utility/os.cpp
   ot/utility/tokenizer.cpp
   ot/spef/spef.cpp
-  ot/timer/cuda_test.cu
+  ot/timer/topo_cuda.cu
+  ot/timer/partition_cuda.cu
 )
 
 #message(STATUS "OT_CPP: ${OT_CPP}")
@@ -352,6 +354,7 @@ add_test(it.shell.ac97_ctrl ${OT_SHELL_CHECKER} ${OT_SHELL} ${OT_BENCHMARK_DIR} 
 add_test(it.shell.aes_core ${OT_SHELL_CHECKER} ${OT_SHELL} ${OT_BENCHMARK_DIR} aes_core)
 add_test(it.shell.des_perf ${OT_SHELL_CHECKER} ${OT_SHELL} ${OT_BENCHMARK_DIR} des_perf)
 add_test(it.shell.vga_lcd ${OT_SHELL_CHECKER} ${OT_SHELL} ${OT_BENCHMARK_DIR} vga_lcd)
+
 
 
 
